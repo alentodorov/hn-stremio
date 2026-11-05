@@ -7,8 +7,8 @@
     "deploy": "wrangler deploy",
     "tail": "wrangler tail",
     "db:init": "wrangler d1 execute hn-stremio --remote --file schema.sql",
-    "backfill:links": "node scripts/backfill-links.mjs data/local.sqlite",
-    "db:seed": "node scripts/export-sql.mjs data/local.sqlite > data/seed.sql && wrangler d1 execute hn-stremio --remote --file data/seed.sql"
+    "db:seed": "wrangler d1 execute hn-stremio --remote --file seed/links.sql",
+    "seed:build": "node scripts/backfill-links.mjs data/local.sqlite && node scripts/export-sql.mjs data/local.sqlite > seed/links.sql"
   },
   "devDependencies": {
     "wrangler": "^4.157.0"

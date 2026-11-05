@@ -36,16 +36,12 @@ Everything is stored in D1 (`schema.sql`). A cron every 15 minutes reads new com
 ```bash
 npm install
 npm run db:init          # create the tables in D1 (safe to re-run)
+npm run db:seed          # load the all-time link mentions from seed/links.sql
 npm run deploy           # deploys to hn-stremio.alen.ro
 npm run tail             # live logs
 ```
 
-The link backfill can also run locally, which is much faster than waiting for the cron:
-
-```bash
-npm run backfill:links   # writes data/local.sqlite (Node 22.5+, no LLM)
-npm run db:seed          # uploads it to D1
-```
+`seed/links.sql` holds every IMDb and Wikipedia link mention on HN up to 2026-11-05 (about 8,300 mentions of 4,300 titles), so the cron doesn't have to crawl them. To rebuild it: `npm run seed:build` (Node 22.5+, no LLM, about an hour).
 
 Settings are `vars` in `wrangler.jsonc`: the model, per-run LLM and lookup budgets, how far back the plain-text pass goes, and the "Talked About Now" window.
 
