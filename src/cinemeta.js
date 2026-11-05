@@ -47,9 +47,12 @@ export async function search({ title, year, type }) {
   let bestScore = 0;
   for (const m of metas.slice(0, 10)) {
     const y = yearOf(m.releaseInfo);
+    // The name has to match; the year then picks between same-named titles and vetoes a loose match.
+    // An exact name with the wrong year still passes (the model's year is often off for new releases).
     let score = 0;
-    if (norm(m.name) === norm(title)) score += 2;
+    if (norm(m.name) === norm(title)) score += 3;
     else if (norm(m.name).startsWith(norm(title)) || norm(title).startsWith(norm(m.name))) score += 1;
+    if (!score) continue;
     if (year && y && Math.abs(y - year) <= 1) score += 2;
     else if (year && y) score -= 1;
     if (score > bestScore) [best, bestScore] = [m, score];
