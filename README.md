@@ -22,10 +22,10 @@ Inspired by Andrej Karpathy's [HackerTube](https://hackertube.org), which mined 
 2. **Resolve.** Every IMDb id is checked against IMDb's suggestion endpoint for its type (movie or series), name and year; posters come from Stremio's metahub. Episodes, shorts and other IMDb pages drop out here. (Cinemeta isn't used for this because it mistypes some ids: it lists Fight Club as a Korean TV show.)
 3. **Rank.** Titles are ranked by the number of distinct commenters who mentioned them, so one person linking the same film ten times counts once. Ties go to the most recently mentioned.
 
-Everything is stored in D1 (`schema.sql`). A cron every 15 minutes reads new comments, then spends the rest of its budget on the history backfill, in this order:
+Everything is stored in D1 (`schema.sql`). A daily cron (06:00 UTC) reads new comments, then spends the rest of its budget on the history backfill, in this order:
 
 1. All-time IMDb links, then Wikipedia links (no LLM). Usually seeded from a local run instead, see below.
-2. Plain-text comments from the last `RECENT_DAYS` (60), so the "Talked About Now" rows fill first (a few hours).
+2. Plain-text comments from the last `RECENT_DAYS` (60), so the "Talked About Now" rows fill first (a few weeks at the default budget).
 3. Ask HN recommendation threads ("best documentaries you've seen", "which movies did you watch multiple times", …), read in full by the LLM.
 4. Older plain-text comments, back `TEXT_BACKFILL_DAYS` (default 365).
 

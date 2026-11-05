@@ -238,12 +238,14 @@ export async function backfillText(env, b, days) {
     await setState(env, "text_before", floor);
     return false;
   }
-  const take = hits.slice(0, b.llm * LLM_BATCH);
+  // At most 10 calls per step, so the caller gets to check the clock between steps.
+  const calls = Math.min(b.llm, 10);
+  const take = hits.slice(0, calls * LLM_BATCH);
   // Cut on a timestamp boundary so the cursor never skips comments sharing a second.
   const cut = take.at(-1).createdAt;
   const chunk = hits.filter((h) => h.createdAt >= cut);
   await processComments(env, chunk, { useLlm: true, b: { ...b, llm: Infinity } });
-  b.llm = 0;
+  b.llm -= calls;
   await setState(env, "text_before", cut);
   return true;
 }
