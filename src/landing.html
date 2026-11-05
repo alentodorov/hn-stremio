@@ -53,8 +53,9 @@
 </head>
 <body>
 <main>
-  <header><h1>stremio / hacker news picks</h1></header>
-  <p class="muted">Movies and series that Hacker News commenters recommend, found by reading HN comments for IMDb and Wikipedia links and, with an AI model, plain-text recommendations. Inspired by Karpathy's HackerTube.</p>
+  <header><h1>hacker news picks · a stremio addon</h1></header>
+  <p class="muted">A free addon for <a href="https://www.stremio.com">Stremio</a>. It adds four rows to your board with the movies and series Hacker News commenters recommend, found by reading HN comments for IMDb and Wikipedia links and, with an AI model, plain-text recommendations. Inspired by Karpathy's HackerTube.</p>
+  <p class="muted">The rows it adds:</p>
   <ul class="muted">
     <li>All-time top movies</li>
     <li>All-time top series</li>
@@ -71,7 +72,7 @@
 
   <footer><a href="/stats.json">stats</a> · <a href="https://github.com/alentodorov/hn-stremio">source</a></footer>
 </main>
-<section class="board" id="board" aria-label="Preview of the Stremio rows"></section>
+<section class="board" id="board" aria-label="Preview of the rows as they appear in Stremio"></section>
 <script>
   // Preview the four catalogs as rows of posters, like the Stremio board.
   const ROWS = [
