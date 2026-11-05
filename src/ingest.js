@@ -29,7 +29,7 @@ export function budget(env) {
 const chunks = (arr, n) => Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n));
 
 // Run fn over items with at most `width` in flight, keeping result order.
-async function pool(items, width, fn) {
+export async function pool(items, width, fn) {
   const results = new Array(items.length);
   let next = 0;
   await Promise.all(Array.from({ length: Math.max(1, Math.min(width, items.length)) }, async () => {

@@ -159,7 +159,8 @@ export async function llmTitles(env, comments) {
   } catch (err) {
     // JSON mode can fail with "JSON Mode couldn't be met"; retry once as plain text.
     console.warn("JSON mode failed, retrying as text:", err.message);
-    parsed = parseJson(await env.AI.run(env.MODEL, { messages, max_tokens: 4096, temperature: 0 }));
+    // More room this time: a reasoning model may spend tokens thinking before the JSON.
+    parsed = parseJson(await env.AI.run(env.MODEL, { messages, max_tokens: 8192, temperature: 0 }));
   }
   const text = Object.fromEntries(comments.map((c) => [c.id, squash(toText(c.html))]));
   const result = {};

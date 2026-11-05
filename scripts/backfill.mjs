@@ -6,7 +6,7 @@
 // Needs a wrangler login (uses its OAuth token). Safe to stop and restart: cursors live in D1.
 const BACKFILL_FROM = "2026-01-01"; // how far back the plain-text LLM pass goes
 import { readFileSync } from "node:fs";
-import { backfillLinks, backfillThreads, backfillText } from "../src/ingest.js";
+import { backfillLinks, backfillThreads, backfillText, processComments, pool } from "../src/ingest.js";
 
 // wrangler.jsonc has // comments; strip them (outside strings) before parsing.
 const stripComments = (src) => {
@@ -74,7 +74,24 @@ const jobs = [
     ["ask hn threads", () => backfillThreads(env, b)],
     [`text, back to ${BACKFILL_FROM}`, () => backfillText(env, b, Math.ceil((Date.now() - Date.parse(BACKFILL_FROM)) / 86400000))],
   ]),
+  ["unread comments", sweepUnread],
 ];
+
+// Comments an earlier pass left unread (a failed LLM call, or a link-only read): fetch them by id and read them.
+async function sweepUnread() {
+  const { results } = await DB.prepare("SELECT comment_id FROM processed WHERE llm = 0 ORDER BY comment_id LIMIT 400").all();
+  if (!results.length) return false;
+  const comments = (await pool(results, 8, async (r) => {
+    const res = await fetch(`https://hn.algolia.com/api/v1/items/${r.comment_id}`);
+    const c = res.ok ? await res.json() : null;
+    return c?.text ? { id: c.id, author: c.author, html: c.text, createdAt: c.created_at_i, storyId: c.story_id, storyTitle: "" } : null;
+  })).filter(Boolean);
+  await processComments(env, comments, { useLlm: true, b });
+  // Whatever is still unread now (deleted comments, a second failure) is marked read so this can't loop.
+  await DB.batch(results.map((r) => DB.prepare("UPDATE processed SET llm = 1 WHERE comment_id = ?").bind(r.comment_id)));
+  console.log(`unread comments: re-read ${comments.length} of ${results.length}`);
+  return results.length === 400;
+}
 const cursor = async () => { const r = await DB.prepare("SELECT value FROM state WHERE key='text_before'").first(); return r ? new Date(JSON.parse(r.value) * 1000).toISOString().slice(0, 16) : "-"; };
 for (const [name, job] of jobs) {
   console.log(`== ${name}`);
