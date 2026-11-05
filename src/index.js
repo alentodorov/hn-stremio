@@ -64,7 +64,7 @@ async function catalog(request, env, ctx, type, id, extra) {
 
   // Rankings only change when the cron runs, so serve them from the edge cache for a while.
   const cache = caches.default;
-  const cacheKey = new Request(new URL(`/cache/${type}/${id}/${skip}`, request.url));
+  const cacheKey = new Request(new URL(`/cache/v2/${type}/${id}/${skip}`, request.url));
   const hit = await cache.match(cacheKey);
   if (hit) return hit;
   const res = json({ metas: await ranked(env, def, skip), cacheMaxAge: 3600, staleRevalidate: 86400 }, 200, 3600);

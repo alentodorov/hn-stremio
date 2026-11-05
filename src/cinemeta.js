@@ -7,18 +7,15 @@ async function getJson(url) {
   return res.json().catch(() => null);
 }
 
-const toTitle = (m, type) => ({
-  imdb_id: m.imdb_id || m.id,
-  type,
-  name: m.name,
-  year: m.releaseInfo || (m.year ? String(m.year) : null),
-  poster: m.poster || `https://images.metahub.space/poster/small/${m.imdb_id || m.id}/img`,
-});
-
 // IMDb id -> title, typed by IMDb's own suggestion endpoint. Cinemeta can't be used for this: its
 // movie endpoint answers for series ids with an unrelated title, and its series endpoint has bogus
 // entries for some movie ids (tt0137523, Fight Club, is a Korean TV show there).
 const IMDB_TYPES = { movie: "movie", tvMovie: "movie", tvSpecial: "movie", video: "movie", tvSeries: "series", tvMiniSeries: "series" };
+
+// Posters come from IMDb too: Stremio's metahub serves the wrong picture for some ids
+// (tt0115398, Triumph of the Nerds, gets a Chinese cartoon) and nothing for others.
+export const posterUrl = (hit, id) =>
+  hit?.i?.imageUrl ? hit.i.imageUrl.replace(/\._V1_[^.]*\.(jpg|png)$/i, "._V1_SX300_.$1") : `https://images.metahub.space/poster/small/${id}/img`;
 
 export async function byImdbId(id) {
   const res = await fetch(`https://v3.sg.media-imdb.com/suggestion/t/${id}.json`);
@@ -26,7 +23,7 @@ export async function byImdbId(id) {
   const hit = ((await res.json()).d || []).find((d) => d.id === id);
   const type = IMDB_TYPES[hit?.qid];
   if (!type) return null; // episodes, shorts, games, people, ...
-  return { imdb_id: id, type, name: hit.l, year: hit.y ? String(hit.y) : null, poster: `https://images.metahub.space/poster/small/${id}/img` };
+  return { imdb_id: id, type, name: hit.l, year: hit.y ? String(hit.y) : null, poster: posterUrl(hit, id) };
 }
 
 const yearOf = (s) => {
@@ -35,8 +32,9 @@ const yearOf = (s) => {
 };
 const norm = (s) => s.toLowerCase().replace(/&/g, "and").replace(/^the /, "").replace(/[^a-z0-9]+/g, " ").trim();
 
-// Title (+ year) from the LLM -> title. Requires an exact name match or a close name plus matching year,
-// so a vague or misspelled title is dropped instead of surfacing something unrelated.
+// Title (+ year) from the LLM -> IMDb id. Requires an exact name match or a close name plus matching year,
+// so a vague or misspelled title is dropped instead of surfacing something unrelated. The caller then
+// resolves the id with byImdbId, which supplies the type, name, year and poster.
 export async function search({ title, year, type }) {
   const data = await getJson(`${CINEMETA}/catalog/${type}/top/search=${encodeURIComponent(title)}.json`);
   const metas = data?.metas || [];
@@ -51,5 +49,5 @@ export async function search({ title, year, type }) {
     else if (year && y) score -= 1;
     if (score > bestScore) [best, bestScore] = [m, score];
   }
-  return bestScore >= 2 ? toTitle(best, type) : null;
+  return bestScore >= 2 ? best.imdb_id || best.id : null;
 }

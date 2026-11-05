@@ -135,12 +135,7 @@ export async function processComments(env, comments, { useLlm, b }) {
           if (id === undefined) {
             if (b.lookups <= 0) throw new OutOfBudget();
             b.lookups -= 1;
-            const hit = await search(t);
-            id = hit?.imdb_id || "";
-            if (hit) {
-              await env.DB.prepare("INSERT OR IGNORE INTO titles (imdb_id, type, name, year, poster) VALUES (?, ?, ?, ?, ?)")
-                .bind(hit.imdb_id, hit.type, hit.name, hit.year, hit.poster).run();
-            }
+            id = (await search(t)) || "";
             await saveLookup(env, key, id);
           }
           if (id) list.push({ imdb_id: id, source: "llm" });

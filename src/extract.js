@@ -94,9 +94,11 @@ const SCHEMA = {
               properties: {
                 title: { type: "string" },
                 year: { type: ["integer", "null"] },
-                type: { type: "string", enum: ["movie", "series"] },
+                type: { type: "string", enum: ["movie", "series", "book", "game", "podcast", "video", "music", "other"] },
+                quote: { type: "string" },
+                recommends: { type: "boolean" },
               },
-              required: ["title", "year", "type"],
+              required: ["title", "year", "type", "quote", "recommends"],
             },
           },
         },
@@ -107,16 +109,27 @@ const SCHEMA = {
   required: ["comments"],
 };
 
-const PROMPT = `You read Hacker News comments and list the movies and TV series each commenter recommends,
-praises, or says is worth watching. Documentaries count (type "movie" for films, "series" for docuseries),
-and so do anime and miniseries.
+const PROMPT = `You read Hacker News comments and pick out the movies and TV series that the commenter personally
+recommends: they say they liked it, that it is great or worth watching, or they suggest it to someone asking what
+to watch. Documentaries, docuseries, anime and miniseries count.
 
-Skip: titles mentioned only negatively or in passing as a reference ("like in The Matrix"), books, games,
-YouTube videos, podcasts, people, companies, and the story's own subject when the commenter is not recommending it.
-Most comments recommend nothing; give them an empty list.
+A title is NOT a recommendation when it is only used to make a point: an analogy or comparison ("like in The Matrix",
+"straight out of Black Mirror"), a plot detail, a quote, a character, a joke, a mention of having seen it or of its
+existence, or a negative or mixed opinion. The story's own subject is not a recommendation unless the commenter
+praises it. Books, games, YouTube videos, podcasts, songs, people and companies are never titles.
 
-Use the commonly known English title and the original release year (null if unsure).
-Reply with JSON only: {"comments": [{"id": <comment id>, "titles": [{"title", "year", "type"}]}]} with one entry per comment.`;
+Most comments recommend nothing: give them an empty list. Be strict; when in doubt, leave it out.
+
+For each title give:
+- "title": the commonly known English title, as named in the comment. Skip it if the comment does not name it
+  ("the documentary about that", "his short film").
+- "year": the original release year. You know this for almost every real film and show; null only if you don't.
+- "type": what it actually is: "movie", "series", "book", "game", "podcast", "video", "music" or "other".
+- "quote": the exact words from the comment, copied verbatim, that show the commenter recommends it.
+- "recommends": true only if the quote is a clear recommendation or praise; false otherwise.
+
+Reply with JSON only: {"comments": [{"id": <comment id>, "titles": [{"title", "year", "type", "quote", "recommends"}]}]}
+with one entry per comment.`;
 
 function parseJson(out) {
   let v = out?.choices?.[0]?.message?.content ?? out?.response ?? out;
@@ -146,12 +159,22 @@ export async function llmTitles(env, comments) {
     console.warn("JSON mode failed, retrying as text:", err.message);
     parsed = parseJson(await env.AI.run(env.MODEL, { messages, max_tokens: 4096, temperature: 0 }));
   }
+  const text = Object.fromEntries(comments.map((c) => [c.id, squash(toText(c.html))]));
   const result = {};
   for (const c of parsed?.comments || []) {
+    const body = text[Number(c.id)];
+    if (!body) continue;
     const titles = (Array.isArray(c.titles) ? c.titles : [])
-      .filter((t) => t && typeof t.title === "string" && t.title.trim() && (t.type === "movie" || t.type === "series"))
+      .filter((t) => t && t.recommends === true && typeof t.title === "string" && (t.type === "movie" || t.type === "series"))
+      .filter((t) => !NOT_A_TITLE.test(t.title.trim()))
+      .filter((t) => t.year) // no year: the model isn't sure the title exists, and a bare name matches too loosely
+      // The quote must really be in the comment: this drops titles the model made up or took from the story title.
+      .filter((t) => typeof t.quote === "string" && squash(t.quote).length >= 8 && body.includes(squash(t.quote)))
       .map((t) => ({ title: t.title.trim(), year: Number(t.year) || null, type: t.type }));
     if (titles.length) result[Number(c.id)] = titles;
   }
   return result;
 }
+
+const NOT_A_TITLE = /^(none|null|n\/a|unknown|untitled|-+|(the |this |that |a )?(documentary|docuseries|film|movie|short( film)?|series|show|episode|video|anime|miniseries))$/i;
+const squash = (s) => s.toLowerCase().replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"').replace(/\s+/g, " ").trim();
