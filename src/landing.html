@@ -98,7 +98,7 @@
         img.addEventListener("error", () => { img.remove(); card.querySelector(".poster").classList.add("missing"); card.querySelector(".poster").prepend(m.name); });
         card.querySelector(".rank").textContent = i + 1;
         card.querySelector(".name").textContent = m.name;
-        card.querySelector(".meta").textContent = [m.releaseInfo, (m.description || "").match(/\d+ Hacker News commenters?/)?.[0].replace(" Hacker News commenters", " people").replace(" Hacker News commenter", " person")].filter(Boolean).join(" · ");
+        card.querySelector(".meta").textContent = (m.description || "").match(/\d+ Hacker News commenters?/)?.[0].replace(" Hacker News commenters", " people").replace(" Hacker News commenter", " person") || "";
         strip.append(card);
       });
       if (metas.length) autoScroll(strip, ROWS.indexOf(ROWS.find((r) => r[1] === id)) % 2 ? -1 : 1);
