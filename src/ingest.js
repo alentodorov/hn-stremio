@@ -105,6 +105,7 @@ export async function processComments(env, comments, { useLlm, b }) {
   const batches = chunks(comments.filter((c) => !already.has(c.id)), LLM_BATCH);
 
   // The LLM calls are the slow part, so run them for several batches at once, up to the budget.
+  // A batch whose call fails is left unread (llm = 0) so a later pass picks it up again.
   const picksOf = new Map();
   if (useLlm) {
     const allowed = batches.slice(0, Math.min(batches.length, b.llm));
@@ -113,8 +114,8 @@ export async function processComments(env, comments, { useLlm, b }) {
       try {
         picksOf.set(batch, await llmTitles(env, batch));
       } catch (err) {
-        console.error("LLM extraction failed, skipping batch:", err.message);
-        picksOf.set(batch, {});
+        console.error("LLM extraction failed, leaving batch for later:", err.message);
+        picksOf.set(batch, null);
       }
     });
   }
@@ -150,9 +151,10 @@ export async function processComments(env, comments, { useLlm, b }) {
     }
 
     // Plain text: match the LLM's titles to IMDb ids, through the lookup cache.
-    if (useLlm) {
-      const picks = picksOf.get(batch);
-      if (!picks) throw new OutOfBudget();
+    const picks = useLlm ? picksOf.get(batch) : undefined;
+    if (useLlm && picks === undefined) throw new OutOfBudget();
+    const llmRead = useLlm && picks !== null;
+    if (llmRead) {
       const wanted = [];
       for (const [cid, titles] of Object.entries(picks)) {
         if (!found.has(Number(cid))) continue;
@@ -194,7 +196,7 @@ export async function processComments(env, comments, { useLlm, b }) {
     }
     for (const c of batch) {
       stmts.push(env.DB.prepare("INSERT INTO processed (comment_id, llm) VALUES (?, ?) ON CONFLICT(comment_id) DO UPDATE SET llm = max(llm, excluded.llm)")
-        .bind(c.id, useLlm ? 1 : 0));
+        .bind(c.id, llmRead ? 1 : 0));
     }
     await env.DB.batch(stmts);
   }
