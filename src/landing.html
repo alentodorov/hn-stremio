@@ -32,6 +32,21 @@
   code { display: block; font: 11px/1.6 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
   footer { margin-top: 32px; }
   @media (width <= 480px) { main { margin: 32px auto; } }
+
+  /* A preview of the four rows as they appear on the Stremio board. */
+  .board { margin: 16px 0 64px; display: flex; flex-direction: column; gap: 28px; }
+  .shelf { display: flex; flex-direction: column; gap: 10px; }
+  .shelf h2 { font-size: 11px; font-weight: 400; color: var(--muted); margin: 0 24px; }
+  .shelf h2 span { color: var(--fg); }
+  .strip { display: flex; gap: 12px; overflow-x: auto; padding: 2px 24px 8px; scroll-snap-type: x proximity; scrollbar-width: thin; scrollbar-color: var(--rule) transparent; }
+  .strip .empty { color: var(--muted); font-size: 11px; }
+  .card { text-decoration: none; flex: 0 0 120px; scroll-snap-align: start; display: flex; flex-direction: column; gap: 6px; font-size: 11px; line-height: 1.3; }
+  .poster { position: relative; aspect-ratio: 2 / 3; border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; background: var(--rule); }
+  .poster img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  .poster .rank { position: absolute; left: 0; bottom: 0; padding: 2px 6px; background: var(--bg); color: var(--fg); border-top-right-radius: 4px; }
+  .poster.missing { display: grid; place-items: center; padding: 8px; text-align: center; color: var(--bg); }
+  .card .name { color: var(--fg); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .card .meta { color: var(--muted); }
 </style>
 </head>
 <body>
@@ -54,6 +69,42 @@
 
   <footer>no account needed · <a href="/stats.json">stats</a> · <a href="https://github.com/alentodorov/hn-stremio">source</a></footer>
 </main>
+<section class="board" id="board" aria-label="Preview of the Stremio rows"></section>
+<script>
+  // Preview the four catalogs as rows of posters, like the Stremio board.
+  const ROWS = [
+    ["movie", "hn-top-movies", "Hacker News: All-Time Top", "movies"],
+    ["series", "hn-top-series", "Hacker News: All-Time Top", "series"],
+    ["movie", "hn-recent-movies", "Hacker News: Talked About Now", "movies"],
+    ["series", "hn-recent-series", "Hacker News: Talked About Now", "series"],
+  ];
+  const board = document.getElementById("board");
+  for (const [type, id, name, kind] of ROWS) {
+    const shelf = document.createElement("div");
+    shelf.className = "shelf";
+    shelf.innerHTML = `<h2><span></span> · ${kind}</h2><div class="strip"></div>`;
+    shelf.querySelector("span").textContent = name;
+    board.append(shelf);
+    const strip = shelf.querySelector(".strip");
+    fetch(`/catalog/${type}/${id}.json`).then((r) => r.json()).then(({ metas }) => {
+      if (!metas.length) strip.innerHTML = '<span class="empty">filling up, check back in a few hours</span>';
+      metas.slice(0, 40).forEach((m, i) => {
+        const card = document.createElement("a");
+        card.className = "card";
+        card.href = `https://www.imdb.com/title/${m.id}/`;
+        card.title = m.description || "";
+        card.innerHTML = `<div class="poster"><img loading="lazy" alt=""><span class="rank"></span></div><div class="name"></div><div class="meta"></div>`;
+        const img = card.querySelector("img");
+        img.src = m.poster;
+        img.addEventListener("error", () => { img.remove(); card.querySelector(".poster").classList.add("missing"); card.querySelector(".poster").prepend(m.name); });
+        card.querySelector(".rank").textContent = i + 1;
+        card.querySelector(".name").textContent = m.name;
+        card.querySelector(".meta").textContent = [m.releaseInfo, (m.description || "").match(/\d+ Hacker News commenters?/)?.[0].replace(" Hacker News commenters", " people").replace(" Hacker News commenter", " person")].filter(Boolean).join(" · ");
+        strip.append(card);
+      });
+    }).catch(() => {});
+  }
+</script>
 <script>
   const manifest = `${location.origin}/manifest.json`;
   document.getElementById("url").textContent = manifest;
