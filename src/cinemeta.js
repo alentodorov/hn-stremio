@@ -1,4 +1,4 @@
-// Title metadata from Cinemeta, Stremio's own catalog (no API key needed).
+// Title metadata: IMDb's suggestion endpoint for ids, Cinemeta (Stremio's catalog) for title search. No keys needed.
 const CINEMETA = "https://v3-cinemeta.strem.io";
 
 async function getJson(url) {
@@ -15,13 +15,18 @@ const toTitle = (m, type) => ({
   poster: m.poster || `https://images.metahub.space/poster/small/${m.imdb_id || m.id}/img`,
 });
 
-// IMDb id -> title. The movie endpoint answers for series ids too, so ask the series endpoint first.
+// IMDb id -> title, typed by IMDb's own suggestion endpoint. Cinemeta can't be used for this: its
+// movie endpoint answers for series ids with an unrelated title, and its series endpoint has bogus
+// entries for some movie ids (tt0137523, Fight Club, is a Korean TV show there).
+const IMDB_TYPES = { movie: "movie", tvMovie: "movie", tvSpecial: "movie", video: "movie", tvSeries: "series", tvMiniSeries: "series" };
+
 export async function byImdbId(id) {
-  const series = await getJson(`${CINEMETA}/meta/series/${id}.json`);
-  if (series?.meta?.name) return toTitle(series.meta, "series");
-  const movie = await getJson(`${CINEMETA}/meta/movie/${id}.json`);
-  if (movie?.meta?.name && movie.meta.type === "movie") return toTitle(movie.meta, "movie");
-  return null; // episodes, video games, unreleased titles, ...
+  const res = await fetch(`https://v3.sg.media-imdb.com/suggestion/t/${id}.json`);
+  if (!res.ok) throw new Error(`IMDb suggestion ${res.status}`);
+  const hit = ((await res.json()).d || []).find((d) => d.id === id);
+  const type = IMDB_TYPES[hit?.qid];
+  if (!type) return null; // episodes, shorts, games, people, ...
+  return { imdb_id: id, type, name: hit.l, year: hit.y ? String(hit.y) : null, poster: `https://images.metahub.space/poster/small/${id}/img` };
 }
 
 const yearOf = (s) => {

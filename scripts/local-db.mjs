@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 
 export function localD1(path, schemaPath = new URL("../schema.sql", import.meta.url)) {
   const db = new DatabaseSync(path);
+  db.exec("PRAGMA busy_timeout = 10000");
   db.exec(readFileSync(schemaPath, "utf8"));
   const stmt = (sql, args = []) => ({
     bind: (...a) => stmt(sql, a),
