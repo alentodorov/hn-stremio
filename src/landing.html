@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#faf9f6">
-<title>Hacker News Picks for Stremio</title>
+<title>Hacker News movies and series picks as a Stremio addon</title>
 <style>
   /* Tokens from weather.alen.ro */
   :root {
@@ -55,8 +55,8 @@
 </head>
 <body>
 <main>
-  <header><h1>hacker news picks · a stremio addon</h1></header>
-  <p class="muted">The movies and series that Hacker News commenters recommend, as a <a href="https://www.stremio.com">Stremio</a> addon. It finds them by scanning HN comments for IMDb and Wikipedia links, and by having an AI model read the comments that mention a film or show by name. Inspired by Karpathy's HackerTube.</p>
+  <header><h1>hacker news movies and series picks as a stremio addon</h1></header>
+  <p class="muted">Movies and series that HN recommends, as a <a href="https://www.stremio.com">Stremio</a> addon. It finds them by scanning HN comments for IMDb and Wikipedia links, and by having an AI model read the comments that mention a film or show by name. Inspired by Karpathy's HackerTube.</p>
 
   <div class="row">
     <div class="actions">
@@ -72,16 +72,16 @@
 <script>
   // Preview the four catalogs as rows of posters, like the Stremio board.
   const ROWS = [
-    ["movie", "hn-top-movies", "Hacker News: All-Time Top", "movies"],
-    ["series", "hn-top-series", "Hacker News: All-Time Top", "series"],
-    ["movie", "hn-recent-movies", "Hacker News: Recommended This Year", "movies"],
-    ["series", "hn-recent-series", "Hacker News: Recommended This Year", "series"],
+    ["movie", "hn-recent-movies", "Movies: Recommended This Year"],
+    ["series", "hn-recent-series", "Series: Recommended This Year"],
+    ["movie", "hn-top-movies", "Movies: All-Time Top"],
+    ["series", "hn-top-series", "Series: All-Time Top"],
   ];
   const board = document.getElementById("board");
-  for (const [type, id, name, kind] of ROWS) {
+  for (const [type, id, name] of ROWS) {
     const shelf = document.createElement("div");
     shelf.className = "shelf";
-    shelf.innerHTML = `<h2><span></span> · ${kind}</h2><div class="strip"></div>`;
+    shelf.innerHTML = `<h2><span></span></h2><div class="strip"></div>`;
     shelf.querySelector("span").textContent = name;
     board.append(shelf);
     const strip = shelf.querySelector(".strip");

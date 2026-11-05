@@ -3,17 +3,17 @@ import { budget, ingestNew, OutOfBudget, getState } from "./ingest.js";
 
 const PAGE_SIZE = 100;
 const CATALOGS = [
-  { type: "movie", id: "hn-top-movies", name: "Hacker News: All-Time Top", rank: "top" },
-  { type: "series", id: "hn-top-series", name: "Hacker News: All-Time Top", rank: "top" },
-  { type: "movie", id: "hn-recent-movies", name: "Hacker News: Recommended This Year", rank: "recent" },
-  { type: "series", id: "hn-recent-series", name: "Hacker News: Recommended This Year", rank: "recent" },
+  { type: "movie", id: "hn-recent-movies", name: "Movies: Recommended This Year", rank: "recent" },
+  { type: "series", id: "hn-recent-series", name: "Series: Recommended This Year", rank: "recent" },
+  { type: "movie", id: "hn-top-movies", name: "Movies: All-Time Top", rank: "top" },
+  { type: "series", id: "hn-top-series", name: "Series: All-Time Top", rank: "top" },
 ];
 
 const MANIFEST = {
   id: "ro.alen.hn-stremio",
-  version: "1.1.0",
+  version: "1.2.0",
   name: "Hacker News Picks",
-  description: "Movies and series that Hacker News commenters recommend: the all-time favorites and this year's picks.",
+  description: "Movies and series that HN recommends: this year's picks and the all-time favorites.",
   logo: "https://news.ycombinator.com/y18.svg",
   resources: ["catalog"],
   types: ["movie", "series"],
