@@ -14,6 +14,8 @@
     // Extracts titles from plain-text comments. Needs JSON mode support.
     "MODEL": "@cf/openai/gpt-oss-120b",
     "LLM_CALLS_PER_RUN": "30",   // 20 comments per call, ~15s each
+    "LLM_CONCURRENCY": "3",      // LLM calls in flight at once
+    "TEXT_STEP_CALLS": "10",     // LLM calls per plain-text backfill step
     "LOOKUPS_PER_RUN": "300",    // Cinemeta / Wikipedia requests per run
     "TEXT_BACKFILL_DAYS": "365", // how far back the plain-text LLM pass goes
     "RECENT_DAYS": "60"          // window for the "Talked About Now" rows

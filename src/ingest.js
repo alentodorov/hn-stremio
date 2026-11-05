@@ -26,39 +26,63 @@ export function budget(env) {
 
 // ---------- resolving ----------
 
-async function cachedLookup(env, key) {
-  const row = await env.DB.prepare("SELECT imdb_id FROM lookups WHERE key = ?").bind(key).first();
-  return row ? row.imdb_id : undefined;
+const chunks = (arr, n) => Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n));
+
+// Run fn over items with at most `width` in flight, keeping result order.
+async function pool(items, width, fn) {
+  const results = new Array(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(width, items.length)) }, async () => {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i], i);
+    }
+  }));
+  return results;
+}
+
+// Cached lookups for many keys at once: key -> imdb id ('' = known miss); absent = never looked up.
+async function cachedLookups(env, keys) {
+  const out = new Map();
+  for (const chunk of chunks([...new Set(keys)], 90)) {
+    const { results } = await env.DB.prepare(`SELECT key, imdb_id FROM lookups WHERE key IN (${chunk.map(() => "?").join(",")})`).bind(...chunk).all();
+    for (const r of results) out.set(r.key, r.imdb_id);
+  }
+  return out;
 }
 const saveLookup = (env, key, id) =>
-  env.DB.prepare("INSERT OR REPLACE INTO lookups (key, imdb_id) VALUES (?, ?)").bind(key, id || "").run();
+  env.DB.prepare("INSERT OR REPLACE INTO lookups (key, imdb_id) VALUES (?, ?)").bind(key, id || "");
 
 // Make sure each IMDb id has a titles row. Returns the ids that resolved to a movie or series.
 async function ensureTitles(env, ids, b) {
+  ids = [...ids];
   const ok = new Set();
-  const missing = [];
-  for (const id of ids) {
-    if (await env.DB.prepare("SELECT 1 FROM titles WHERE imdb_id = ?").bind(id).first()) ok.add(id);
-    else if ((await cachedLookup(env, `id:${id}`)) !== "") missing.push(id); // "" = known miss
+  for (const chunk of chunks(ids, 90)) {
+    const { results } = await env.DB.prepare(`SELECT imdb_id FROM titles WHERE imdb_id IN (${chunk.map(() => "?").join(",")})`).bind(...chunk).all();
+    for (const r of results) ok.add(r.imdb_id);
   }
+  const unknown = ids.filter((id) => !ok.has(id));
+  const known = await cachedLookups(env, unknown.map((id) => `id:${id}`));
+  const missing = unknown.filter((id) => known.get(`id:${id}`) !== ""); // "" = known miss
+  if (!missing.length) return ok;
+  if (b.lookups <= 0) throw new OutOfBudget();
   // Look up a few at a time (Workers allow 6 open connections; the local backfill uses more).
   const width = Number(env.LOOKUP_CONCURRENCY || 6);
-  for (let i = 0; i < missing.length; i += width) {
-    if (b.lookups <= 0) throw new OutOfBudget();
-    const chunk = missing.slice(i, i + width);
-    b.lookups -= 2 * chunk.length;
-    const found = await Promise.all(chunk.map((id) => byImdbId(id).catch(() => undefined)));
-    for (const [j, t] of found.entries()) {
-      if (t === undefined) continue; // network error: try again another time
-      if (t) {
-        await env.DB.prepare("INSERT OR REPLACE INTO titles (imdb_id, type, name, year, poster) VALUES (?, ?, ?, ?, ?)")
-          .bind(t.imdb_id, t.type, t.name, t.year, t.poster).run();
-        ok.add(chunk[j]);
-      } else {
-        await saveLookup(env, `id:${chunk[j]}`, "");
-      }
+  const take = missing.slice(0, Math.max(width, Math.floor(b.lookups / 2)));
+  b.lookups -= 2 * take.length;
+  const found = await pool(take, width, (id) => byImdbId(id).catch(() => undefined));
+  const stmts = [];
+  for (const [j, t] of found.entries()) {
+    if (t === undefined) continue; // network error: try again another time
+    if (t) {
+      stmts.push(env.DB.prepare("INSERT OR REPLACE INTO titles (imdb_id, type, name, year, poster) VALUES (?, ?, ?, ?, ?)").bind(t.imdb_id, t.type, t.name, t.year, t.poster));
+      ok.add(take[j]);
+    } else {
+      stmts.push(saveLookup(env, `id:${take[j]}`, ""));
     }
   }
+  if (stmts.length) await env.DB.batch(stmts);
+  if (take.length < missing.length) throw new OutOfBudget();
   return ok;
 }
 
@@ -72,74 +96,85 @@ export class OutOfBudget extends Error {}
 export async function processComments(env, comments, { useLlm, b }) {
   comments = [...comments].sort((x, y) => x.createdAt - y.createdAt || x.id - y.id);
   const already = new Set();
-  for (let i = 0; i < comments.length; i += 90) {
-    const ids = comments.slice(i, i + 90).map((c) => c.id);
+  for (const chunk of chunks(comments.map((c) => c.id), 90)) {
     const { results } = await env.DB.prepare(
-      `SELECT comment_id FROM processed WHERE comment_id IN (${ids.map(() => "?").join(",")})${useLlm ? " AND llm = 1" : ""}`,
-    ).bind(...ids).all();
+      `SELECT comment_id FROM processed WHERE comment_id IN (${chunk.map(() => "?").join(",")})${useLlm ? " AND llm = 1" : ""}`,
+    ).bind(...chunk).all();
     results.forEach((r) => already.add(r.comment_id));
   }
+  const batches = chunks(comments.filter((c) => !already.has(c.id)), LLM_BATCH);
 
-  for (let i = 0; i < comments.length; i += LLM_BATCH) {
-    const batch = comments.slice(i, i + LLM_BATCH).filter((c) => !already.has(c.id));
-    if (!batch.length) continue;
+  // The LLM calls are the slow part, so run them for several batches at once, up to the budget.
+  const picksOf = new Map();
+  if (useLlm) {
+    const allowed = batches.slice(0, Math.min(batches.length, b.llm));
+    b.llm -= allowed.length;
+    await pool(allowed, Number(env.LLM_CONCURRENCY || 1), async (batch) => {
+      try {
+        picksOf.set(batch, await llmTitles(env, batch));
+      } catch (err) {
+        console.error("LLM extraction failed, skipping batch:", err.message);
+        picksOf.set(batch, {});
+      }
+    });
+  }
+
+  const width = Number(env.LOOKUP_CONCURRENCY || 6);
+  for (const batch of batches) {
     const found = new Map(batch.map((c) => [c.id, []])); // comment id -> [{imdb_id, source}]
 
     // Links
-    const wikiNeeded = new Set();
-    const cands = new Map();
-    for (const c of batch) {
-      const l = linkCandidates(c.html);
-      cands.set(c.id, l);
-      for (const id of l.imdb) found.get(c.id).push({ imdb_id: id, source: "imdb" });
-      l.wiki.forEach((w) => wikiNeeded.add(w));
-    }
-    if (wikiNeeded.size) {
-      const wikiMap = {};
-      const unknown = [];
-      for (const w of wikiNeeded) {
-        const cached = await cachedLookup(env, `wiki:${w}`);
-        if (cached === undefined) unknown.push(w);
-        else wikiMap[w] = cached;
-      }
+    const cands = new Map(batch.map((c) => [c.id, linkCandidates(c.html)]));
+    for (const c of batch) for (const id of cands.get(c.id).imdb) found.get(c.id).push({ imdb_id: id, source: "imdb" });
+    const wikiNeeded = [...new Set([...cands.values()].flatMap((l) => l.wiki))];
+    if (wikiNeeded.length) {
+      const wikiMap = await cachedLookups(env, wikiNeeded.map((w) => `wiki:${w}`));
+      const unknown = wikiNeeded.filter((w) => !wikiMap.has(`wiki:${w}`));
       if (unknown.length) {
         if (b.lookups <= 0) throw new OutOfBudget();
         b.lookups -= 2 * Math.ceil(unknown.length / 50);
         const fresh = await wikiToImdb(unknown);
+        const stmts = [];
         for (const [w, id] of Object.entries(fresh)) {
-          wikiMap[w] = id;
-          await saveLookup(env, `wiki:${w}`, id);
+          wikiMap.set(`wiki:${w}`, id);
+          stmts.push(saveLookup(env, `wiki:${w}`, id));
         }
+        if (stmts.length) await env.DB.batch(stmts);
       }
       for (const c of batch) {
-        for (const w of cands.get(c.id).wiki) if (wikiMap[w]) found.get(c.id).push({ imdb_id: wikiMap[w], source: "wikipedia" });
+        for (const w of cands.get(c.id).wiki) {
+          const id = wikiMap.get(`wiki:${w}`);
+          if (id) found.get(c.id).push({ imdb_id: id, source: "wikipedia" });
+        }
       }
     }
 
-    // Plain text
+    // Plain text: match the LLM's titles to IMDb ids, through the lookup cache.
     if (useLlm) {
-      if (b.llm <= 0) throw new OutOfBudget();
-      b.llm -= 1;
-      let picks = {};
-      try {
-        picks = await llmTitles(env, batch);
-      } catch (err) {
-        console.error("LLM extraction failed, skipping batch:", err.message);
-      }
+      const picks = picksOf.get(batch);
+      if (!picks) throw new OutOfBudget();
+      const wanted = [];
       for (const [cid, titles] of Object.entries(picks)) {
-        const list = found.get(Number(cid));
-        if (!list) continue;
-        for (const t of titles) {
-          const key = `q:${t.type}|${t.title.toLowerCase()}|${t.year || ""}`;
-          let id = await cachedLookup(env, key);
-          if (id === undefined) {
-            if (b.lookups <= 0) throw new OutOfBudget();
-            b.lookups -= 1;
-            id = (await search(t)) || "";
-            await saveLookup(env, key, id);
-          }
-          if (id) list.push({ imdb_id: id, source: "llm" });
+        if (!found.has(Number(cid))) continue;
+        for (const t of titles) wanted.push({ cid: Number(cid), t, key: `q:${t.type}|${t.title.toLowerCase()}|${t.year || ""}` });
+      }
+      const cached = await cachedLookups(env, wanted.map((w) => w.key));
+      const unknown = [...new Map(wanted.filter((w) => !cached.has(w.key)).map((w) => [w.key, w])).values()];
+      if (unknown.length) {
+        if (b.lookups <= 0) throw new OutOfBudget();
+        b.lookups -= unknown.length;
+        const ids = await pool(unknown, width, (w) => search(w.t).then((id) => id || "", () => undefined));
+        const stmts = [];
+        for (const [i, w] of unknown.entries()) {
+          if (ids[i] === undefined) continue; // network error: try again another time
+          cached.set(w.key, ids[i]);
+          stmts.push(saveLookup(env, w.key, ids[i]));
         }
+        if (stmts.length) await env.DB.batch(stmts);
+      }
+      for (const w of wanted) {
+        const id = cached.get(w.key);
+        if (id) found.get(w.cid).push({ imdb_id: id, source: "llm" });
       }
     }
 
@@ -238,8 +273,8 @@ export async function backfillText(env, b, days) {
     await setState(env, "text_before", floor);
     return false;
   }
-  // At most 10 calls per step, so the caller gets to check the clock between steps.
-  const calls = Math.min(b.llm, 10);
+  // A bounded number of calls per step, so the caller gets to check the clock between steps.
+  const calls = Math.min(b.llm, Number(env.TEXT_STEP_CALLS || 10));
   const take = hits.slice(0, calls * LLM_BATCH);
   // Cut on a timestamp boundary so the cursor never skips comments sharing a second.
   const cut = take.at(-1).createdAt;

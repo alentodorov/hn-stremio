@@ -51,5 +51,5 @@ Link mentions cost nothing but requests. The LLM pass reads about 150 matching c
 
 ## Caveats
 
-- "Mentioned" is not always "recommended": link mentions are counted without reading the sentiment. The LLM pass only counts positive recommendations.
+- "Mentioned" is not always "recommended": link mentions are counted without reading the sentiment. The LLM pass only counts positive mentions: liked it, recommends it, calls it great.
 - Comments that name a title in plain text outside the keyword list, or older than the plain-text backfill window, are only counted if they link to IMDb or Wikipedia.

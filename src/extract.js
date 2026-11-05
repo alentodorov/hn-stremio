@@ -110,23 +110,25 @@ const SCHEMA = {
 };
 
 const PROMPT = `You read Hacker News comments and pick out the movies and TV series that the commenter personally
-recommends: they say they liked it, that it is great or worth watching, or they suggest it to someone asking what
-to watch. Documentaries, docuseries, anime and miniseries count.
+likes: they recommend it, say they liked, loved or enjoyed it, call it great, fun, brilliant, a favorite or worth
+watching, or suggest it to someone asking what to watch. Documentaries, docuseries, anime and miniseries count.
 
-A title is NOT a recommendation when it is only used to make a point: an analogy or comparison ("like in The Matrix",
-"straight out of Black Mirror"), a plot detail, a quote, a character, a joke, a mention of having seen it or of its
-existence, or a negative or mixed opinion. The story's own subject is not a recommendation unless the commenter
-praises it. Books, games, YouTube videos, podcasts, songs, people and companies are never titles.
+The opinion must be the commenter's own view of the work itself. A title does NOT count when it is only used to
+make a point: an analogy or comparison ("like in The Matrix", "straight out of Black Mirror"), a plot detail, a
+quote, a character, a joke, a neutral mention of having seen it or of its existence, a negative or mixed opinion,
+or a remark about its box office, popularity, budget, awards or influence ("made strong returns", "did well").
+The story's own subject doesn't count unless the commenter praises it. Books, games, YouTube videos, lectures,
+podcasts, songs, people and companies are never titles.
 
-Most comments recommend nothing: give them an empty list. Be strict; when in doubt, leave it out.
+Most comments have nothing: give them an empty list. When in doubt, leave it out.
 
 For each title give:
 - "title": the commonly known English title, as named in the comment. Skip it if the comment does not name it
   ("the documentary about that", "his short film").
 - "year": the original release year. You know this for almost every real film and show; null only if you don't.
 - "type": what it actually is: "movie", "series", "book", "game", "podcast", "video", "music" or "other".
-- "quote": the exact words from the comment, copied verbatim, that show the commenter recommends it.
-- "recommends": true only if the quote is a clear recommendation or praise; false otherwise.
+- "quote": the exact words from the comment, copied verbatim, that show the commenter likes or recommends it.
+- "recommends": true only if the quote shows the commenter personally likes it or recommends it; false otherwise.
 
 Reply with JSON only: {"comments": [{"id": <comment id>, "titles": [{"title", "year", "type", "quote", "recommends"}]}]}
 with one entry per comment.`;

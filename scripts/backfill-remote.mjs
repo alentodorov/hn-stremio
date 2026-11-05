@@ -56,7 +56,8 @@ const DB = {
   batch: async (stmts) => { for (let i = 0; i < stmts.length; i += 100) await api(`/d1/database/${dbId}/query`, { sql: stmts.slice(i, i + 100).map((s) => s.inline()).join(";\n") }); return []; },
 };
 const AI = { run: (model, input) => api(`/ai/run/${model}`, input) };
-const env = { ...cfg.vars, DB, AI };
+// No Worker limits here, so go wide: more LLM calls in flight and bigger steps.
+const env = { ...cfg.vars, LLM_CONCURRENCY: "8", LOOKUP_CONCURRENCY: "8", TEXT_STEP_CALLS: "50", DB, AI };
 
 const only = process.argv[2];
 const b = { llm: Infinity, lookups: Infinity };
