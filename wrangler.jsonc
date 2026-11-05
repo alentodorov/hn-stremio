@@ -16,7 +16,10 @@
     "LLM_CALLS_PER_RUN": "30",   // 20 comments per call, ~15s each
     "LLM_CONCURRENCY": "3",      // LLM calls in flight at once
     "LOOKUPS_PER_RUN": "300",    // Cinemeta / Wikipedia requests per run
-    "RECENT_SINCE": "2026-01-01" // start of the "Recommended This Year" rows
+    "RECENT_SINCE": "2026-01-01", // start of the "Recommended This Year" rows
+    // PostHog: landing page views and catalog requests. Leave the token empty to disable.
+    "POSTHOG_HOST": "https://eu.i.posthog.com",
+    "POSTHOG_TOKEN": ""
   },
   "observability": { "enabled": true }
 }

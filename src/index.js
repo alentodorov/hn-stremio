@@ -22,6 +22,36 @@ const MANIFEST = {
 };
 
 const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "*" };
+
+// ---------- analytics ----------
+
+// One anonymous PostHog event per request, sent after the response. No person profiles: the
+// distinct id is a daily hash of ip + user agent, enough to count distinct clients.
+async function track(env, request, event, properties) {
+  if (!env.POSTHOG_TOKEN) return;
+  const ip = request.headers.get("cf-connecting-ip") || "";
+  const ua = request.headers.get("user-agent") || "";
+  const day = new Date().toISOString().slice(0, 10);
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${ip}|${ua}|${day}`));
+  const distinct_id = [...new Uint8Array(digest)].slice(0, 12).map((b) => b.toString(16).padStart(2, "0")).join("");
+  await fetch(`${env.POSTHOG_HOST || "https://eu.i.posthog.com"}/i/v0/e/`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      api_key: env.POSTHOG_TOKEN,
+      event,
+      distinct_id,
+      properties: {
+        ...properties,
+        $process_person_profile: false,
+        $lib: "hn-stremio-worker",
+        $current_url: request.url,
+        client: /stremio/i.test(ua) ? "stremio" : /mozilla/i.test(ua) ? "browser" : "other",
+        country: request.cf?.country || null,
+      },
+    }),
+  }).catch(() => {});
+}
 const json = (data, status = 200, maxAge = 0) =>
   new Response(JSON.stringify(data), {
     status,
@@ -66,6 +96,7 @@ async function catalog(request, env, ctx, type, id, extra) {
   const cache = caches.default;
   const cacheKey = new Request(new URL(`/cache/v5/${type}/${id}/${skip}`, request.url));
   const hit = await cache.match(cacheKey);
+  ctx.waitUntil(track(env, request, "catalog", { catalog: id, type, skip, cached: !!hit }));
   if (hit) return hit;
   const res = json({ metas: await ranked(env, def, skip), cacheMaxAge: 3600, staleRevalidate: 86400 }, 200, 3600);
   ctx.waitUntil(cache.put(cacheKey, res.clone()));
@@ -104,8 +135,14 @@ async function handle(request, env, ctx) {
   if (request.method !== "GET" && request.method !== "HEAD") return json({ error: "Not found" }, 404);
   const parts = url.pathname.split("/").filter(Boolean);
 
-  if (!parts.length) return new Response(LANDING_HTML, { headers: { "content-type": "text/html; charset=utf-8" } });
-  if (parts.length === 1 && parts[0] === "manifest.json") return json(MANIFEST, 200, 3600);
+  if (!parts.length) {
+    const html = LANDING_HTML.replace("__POSTHOG_TOKEN__", env.POSTHOG_TOKEN || "").replace("__POSTHOG_HOST__", env.POSTHOG_HOST || "");
+    return new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } });
+  }
+  if (parts.length === 1 && parts[0] === "manifest.json") {
+    ctx.waitUntil(track(env, request, "manifest", {}));
+    return json(MANIFEST, 200, 3600);
+  }
   if (parts.length === 1 && parts[0] === "stats.json") return stats(env);
   // /catalog/{type}/{id}.json or /catalog/{type}/{id}/{extra}.json
   if (parts[0] === "catalog" && (parts.length === 3 || parts.length === 4)) {
