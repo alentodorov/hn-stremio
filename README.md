@@ -27,7 +27,7 @@ Everything is stored in D1 (`schema.sql`). A daily cron (06:00 UTC) reads the co
 1. All-time IMDb links, then Wikipedia links (no LLM). Usually seeded from `seed/links.sql` instead, see below.
 2. Plain-text comments since `RECENT_SINCE` (2026-01-01), so the "Recommended This Year" rows fill first.
 3. Ask HN recommendation threads ("best documentaries you've seen", "which movies did you watch multiple times", …), read in full by the LLM.
-4. Older plain-text comments, back to `BACKFILL_FROM` in the script (2026-01-01).
+4. Older plain-text comments, back to `BACKFILL_FROM` in the script (2025-01-01).
 
 `/stats.json` shows the counts and how far each backfill has got.
 
@@ -47,7 +47,7 @@ Settings are `vars` in `wrangler.jsonc`: the model, per-run LLM and lookup budge
 
 ### Cost
 
-Link mentions cost nothing but requests. The LLM pass reads about 150 matching comments a day going forward, plus about 45,000 for the 2026 backfill and a few thousand from Ask HN threads; at Workers AI's gpt-oss-120b prices that is roughly $8 once, then a few cents a day. Move `BACKFILL_FROM` to spend less.
+Link mentions cost nothing but requests. The LLM pass reads about 150 matching comments a day going forward, plus about 50,000 a year for the backfill (2025 and 2026 so far) and a few thousand from Ask HN threads; at Workers AI's gpt-oss-120b prices that is roughly $8 a year once, then a few cents a day. Move `BACKFILL_FROM` to spend less.
 
 ## Caveats
 

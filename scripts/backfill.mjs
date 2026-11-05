@@ -4,7 +4,7 @@
 //   node scripts/backfill.mjs            # until every backfill job reports done
 //   node scripts/backfill.mjs recent     # stop once the RECENT_SINCE text window is done
 // Needs a wrangler login (uses its OAuth token). Safe to stop and restart: cursors live in D1.
-const BACKFILL_FROM = "2026-01-01"; // how far back the plain-text LLM pass goes
+const BACKFILL_FROM = "2025-01-01"; // how far back the plain-text LLM pass goes
 const SHARDS = 6;                   // date ranges of the history read side by side
 const THREADS_AT_ONCE = 4;          // Ask HN threads read side by side
 import { readFileSync } from "node:fs";
@@ -117,8 +117,9 @@ async function shardedText() {
   if (!to) throw new Error("run the recent window first");
   const from = Math.floor(Date.parse(BACKFILL_FROM) / 1000);
   const span = (to - from) / SHARDS;
+  // Cursor keys carry the range, so moving BACKFILL_FROM back starts fresh cursors for the new range.
   const shards = Array.from({ length: SHARDS }, (_, i) => ({
-    i, key: `text_before:${i}`, floor: Math.floor(from + i * span), start: Math.floor(from + (i + 1) * span),
+    i, key: `text_before:${BACKFILL_FROM}:${i}`, floor: Math.floor(from + i * span), start: Math.floor(from + (i + 1) * span),
   }));
   await Promise.all(shards.map(async (sh) => {
     for (let step = 1; ; step++) {
