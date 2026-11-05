@@ -94,7 +94,7 @@ async function catalog(request, env, ctx, type, id, extra) {
 
   // Rankings only change when the cron runs, so serve them from the edge cache for a while.
   const cache = caches.default;
-  const cacheKey = new Request(new URL(`/cache/v6/${type}/${id}/${skip}`, request.url));
+  const cacheKey = new Request(new URL(`/cache/v7/${type}/${id}/${skip}`, request.url));
   const hit = await cache.match(cacheKey);
   ctx.waitUntil(track(env, request, "catalog", { catalog: id, type, skip, cached: !!hit }));
   if (hit) return hit;
