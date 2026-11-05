@@ -38,9 +38,10 @@
   .shelf { display: flex; flex-direction: column; gap: 10px; }
   .shelf h2 { font-size: 11px; font-weight: 400; color: var(--muted); margin: 0 24px; }
   .shelf h2 span { color: var(--fg); }
-  .strip { display: flex; gap: 12px; overflow-x: auto; padding: 2px 24px 8px; scroll-snap-type: x proximity; scrollbar-width: thin; scrollbar-color: var(--rule) transparent; }
+  .strip { display: flex; gap: 12px; overflow-x: auto; padding: 2px 24px 8px; scrollbar-width: none; }
+  .strip::-webkit-scrollbar { display: none; }
   .strip .empty { color: var(--muted); font-size: 11px; }
-  .card { text-decoration: none; flex: 0 0 120px; scroll-snap-align: start; display: flex; flex-direction: column; gap: 6px; font-size: 11px; line-height: 1.3; }
+  .card { text-decoration: none; flex: 0 0 120px; display: flex; flex-direction: column; gap: 6px; font-size: 11px; line-height: 1.3; }
   .poster { position: relative; aspect-ratio: 2 / 3; border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; background: var(--rule); }
   .poster img { display: block; width: 100%; height: 100%; object-fit: cover; }
   .poster .rank { position: absolute; left: 0; bottom: 0; padding: 2px 6px; background: var(--bg); color: var(--fg); border-top-right-radius: 4px; }
@@ -102,7 +103,37 @@
         card.querySelector(".meta").textContent = [m.releaseInfo, (m.description || "").match(/\d+ Hacker News commenters?/)?.[0].replace(" Hacker News commenters", " people").replace(" Hacker News commenter", " person")].filter(Boolean).join(" · ");
         strip.append(card);
       });
+      if (metas.length) autoScroll(strip, ROWS.indexOf(ROWS.find((r) => r[1] === id)) % 2 ? -1 : 1);
     }).catch(() => {});
+  }
+
+  // Drift each row sideways, wrapping seamlessly; pause while hovered or touched.
+  function autoScroll(strip, dir) {
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const cards = [...strip.children];
+    if (cards.reduce((w, c) => w + c.offsetWidth + 12, 0) < strip.clientWidth) return; // fits, nothing to scroll
+    cards.forEach((c) => strip.append(c.cloneNode(true))); // second copy so the loop has no seam
+    let paused = false;
+    let last = null;
+    for (const [on, v] of [["pointerenter", true], ["pointerleave", false], ["touchstart", true], ["touchend", false], ["focusin", true], ["focusout", false]]) {
+      strip.addEventListener(on, () => { paused = v; last = null; }, { passive: true });
+    }
+    const half = () => strip.scrollWidth / 2;
+    // Keep a fractional position ourselves: scrollLeft rounds to whole pixels and would stall at slow speeds.
+    let pos = dir < 0 ? half() : 0;
+    strip.scrollLeft = pos;
+    const tick = (now) => {
+      if (!paused && !document.hidden && last !== null) {
+        if (Math.abs(strip.scrollLeft - pos) > 2) pos = strip.scrollLeft; // the user scrolled by hand
+        pos += dir * 25 * (now - last) / 1000;
+        if (pos >= half()) pos -= half();
+        else if (pos <= 0) pos += half();
+        strip.scrollLeft = pos;
+      }
+      last = now;
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
   }
 </script>
 <script>
