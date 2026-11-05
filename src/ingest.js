@@ -231,9 +231,9 @@ export async function backfillThreads(env, b) {
   return true;
 }
 
-// Older plain-text comments, back to TEXT_BACKFILL_DAYS ago. Returns false when finished.
-export async function backfillText(env, b) {
-  const floor = Math.floor(Date.now() / 1000) - Number(env.TEXT_BACKFILL_DAYS || 365) * 86400;
+// Older plain-text comments, back to `days` ago. Returns false when finished.
+export async function backfillText(env, b, days) {
+  const floor = Math.floor(Date.now() / 1000) - days * 86400;
   const fwd = await getState(env, "fwd_cursor", Math.floor(Date.now() / 1000));
   const before = await getState(env, "text_before", fwd);
   if (before <= floor) return false;

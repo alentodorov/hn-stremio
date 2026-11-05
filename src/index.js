@@ -125,12 +125,14 @@ async function ingest(env) {
   try {
     const n = await ingestNew(env, b);
     console.log(`New comments checked: ${n}`);
-    // Backfill history in order: link mentions (cheap, no LLM), Ask HN threads, then older plain text.
+    // Backfill history in order: link mentions (cheap, no LLM), plain text for the "Talked About Now"
+    // window, Ask HN recommendation threads, then older plain text.
     const jobs = [
       () => backfillLinks(env, b, "imdb"),
       () => backfillLinks(env, b, "wiki"),
+      () => backfillText(env, b, Number(env.RECENT_DAYS || 60)),
       () => backfillThreads(env, b),
-      () => backfillText(env, b),
+      () => backfillText(env, b, Number(env.TEXT_BACKFILL_DAYS || 365)),
     ];
     for (const job of jobs) {
       while (timeLeft() && b.llm > 0 && b.lookups > 0) {

@@ -45,6 +45,7 @@ function toComment(h) {
 const THREAD_QUERIES = ["movies", "films", "tv shows", "tv series", "documentaries", "anime", "shows to watch", "netflix"];
 const THREAD_TITLE = /\b(movies?|films?|tv|shows?|series|documentar(y|ies)|anime|watch)\b/i;
 const ASKING = /\b(recommend|best|favou?rite|good|great|underrated|what|which|any)\b/i;
+const OFF_TOPIC = /youtube|podcast|novel|video ?games?|download/i;
 
 export async function recommendationThreads() {
   const seen = new Map();
@@ -58,7 +59,7 @@ export async function recommendationThreads() {
       attributesToHighlight: "",
     });
     for (const h of hits) {
-      if (THREAD_TITLE.test(h.title) && ASKING.test(h.title)) seen.set(Number(h.objectID), h);
+      if (THREAD_TITLE.test(h.title) && ASKING.test(h.title) && !OFF_TOPIC.test(h.title)) seen.set(Number(h.objectID), h);
     }
   }
   return [...seen.values()].map((h) => ({ id: Number(h.objectID), title: h.title, comments: h.num_comments }));

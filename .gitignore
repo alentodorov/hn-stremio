@@ -6,3 +6,4 @@ node_modules/
 backups/
 .DS_Store
 data/
+wrangler.localtest.jsonc
