@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#faf9f6">
+<title>Hacker News Picks for Stremio</title>
+<style>
+  /* Tokens from weather.alen.ro */
+  :root {
+    --bg: #faf9f6;
+    --fg: #282824;
+    --muted: #77776f;
+    --rule: #aaa99f;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: var(--fg); background: var(--bg); font-family: var(--mono); font-synthesis: none;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1c1c1a; --fg: #e8e7e1; --muted: #9a9990; --rule: #55544e; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); }
+  main { max-width: 380px; margin: 64px auto; padding: 0 24px; font-size: 14px; line-height: 1.6; }
+  a, button { color: inherit; font: inherit; }
+  button { cursor: pointer; background: none; border: 0; padding: 0; text-align: left; }
+  a:focus-visible, button:focus-visible { outline: 1px solid; outline-offset: 5px; }
+  h1 { font-size: 14px; font-weight: 400; margin: 0; }
+  p { margin: 10px 0; }
+  .muted, footer { color: var(--muted); font-size: 11px; }
+  ul { padding-left: 1.2em; margin: 8px 0; }
+  .row { display: flex; flex-direction: column; gap: 8px; margin: 32px 0; }
+  code { display: block; font: 11px/1.6 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+  footer { margin-top: 32px; }
+  @media (width <= 480px) { main { margin: 32px auto; } }
+</style>
+</head>
+<body>
+<main>
+  <header><h1>stremio / hacker news picks</h1></header>
+  <p class="muted">Movies and series that Hacker News commenters recommend, found by reading HN comments for IMDb and Wikipedia links and, with an AI model, plain-text recommendations. Inspired by Karpathy's HackerTube.</p>
+  <ul class="muted">
+    <li>All-time top movies</li>
+    <li>All-time top series</li>
+    <li>Movies talked about now (last 60 days)</li>
+    <li>Series talked about now (last 60 days)</li>
+  </ul>
+  <p class="muted">Titles are ranked by how many different people mentioned them.</p>
+
+  <div class="row">
+    <a id="install" href="#">[install in stremio]</a>
+    <button id="copy" type="button">[copy manifest url]</button>
+    <code id="url"></code>
+  </div>
+
+  <footer>no account needed · <a href="/stats.json">stats</a> · <a href="https://github.com/alentodorov/hn-stremio">source</a></footer>
+</main>
+<script>
+  const manifest = `${location.origin}/manifest.json`;
+  document.getElementById("url").textContent = manifest;
+  document.getElementById("install").href = manifest.replace(/^https?:/, "stremio:");
+  const copy = document.getElementById("copy");
+  copy.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(manifest); copy.textContent = "[copied]"; }
+    catch { copy.textContent = "[copy failed, select the url below]"; }
+  });
+</script>
+</body>
+</html>

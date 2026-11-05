@@ -1,0 +1,58 @@
+# Hacker News Picks for Stremio
+
+A Stremio addon, running as a Cloudflare Worker, that adds four rows of the movies and series Hacker News commenters recommend:
+
+| Row | What's in it |
+| --- | --- |
+| Hacker News: All-Time Top (movies) | Movies mentioned by the most distinct HN commenters, 2007 to now |
+| Hacker News: All-Time Top (series) | Same, for series |
+| Hacker News: Talked About Now (movies) | Most-mentioned movies in the last 60 days |
+| Hacker News: Talked About Now (series) | Same, for series |
+
+No account or configuration needed. Install from **https://hn-stremio.alen.ro**.
+
+Inspired by Andrej Karpathy's [HackerTube](https://hackertube.org), which mined about 40,000 HN comments for the YouTube videos people recommend. This does the same for films and TV.
+
+## How it works
+
+1. **Find mentions.** HN comments come from the [Algolia HN Search API](https://hn.algolia.com/api). Three sources:
+   - IMDb title links (`imdb.com/title/tt…`) give the IMDb id directly.
+   - Wikipedia links to film or TV articles (`…_(film)`, `…_(TV_series)`, `…_(miniseries)`, …) are mapped to IMDb ids through Wikidata (property P345).
+   - Plain-text recommendations: comments containing words like *movie, film, documentary, series, season, anime, watched* are read in batches of 20 by Workers AI (`@cf/meta/llama-3.3-70b-instruct-fp8-fast`, JSON mode), which lists the titles each commenter recommends or praises and skips passing references, books, games and YouTube videos. Titles are matched to Cinemeta by exact name, or close name plus year, so vague guesses are dropped.
+2. **Resolve.** Every IMDb id is checked against Cinemeta, Stremio's own catalog, to get its type (movie or series), name, year and poster. Episodes and non-screen IMDb pages drop out here.
+3. **Rank.** Titles are ranked by the number of distinct commenters who mentioned them, so one person linking the same film ten times counts once. Ties go to the most recently mentioned.
+
+Everything is stored in D1 (`schema.sql`). A cron every 15 minutes reads new comments, then spends the rest of its budget on the history backfill, in this order:
+
+1. All-time IMDb links, then Wikipedia links (no LLM).
+2. Ask HN recommendation threads ("best documentaries you've seen", "which movies did you watch multiple times", …), read in full by the LLM.
+3. Older plain-text comments, back `TEXT_BACKFILL_DAYS` (default 365).
+
+`/stats.json` shows the counts and how far each backfill has got.
+
+## Develop and deploy
+
+```bash
+npm install
+npm run db:init          # create the tables in D1 (safe to re-run)
+npm run deploy           # deploys to hn-stremio.alen.ro
+npm run tail             # live logs
+```
+
+The link backfill can also run locally, which is much faster than waiting for the cron:
+
+```bash
+npm run backfill:links   # writes data/local.sqlite (Node 22.5+, no LLM)
+npm run db:seed          # uploads it to D1
+```
+
+Settings are `vars` in `wrangler.jsonc`: the model, per-run LLM and lookup budgets, how far back the plain-text pass goes, and the "Talked About Now" window.
+
+### Cost
+
+Link mentions cost nothing but requests. The LLM pass reads about 500 matching comments a day going forward, plus about 180,000 for a one-year backfill, roughly 40M input tokens in total; at Workers AI's Llama 3.3 70B price that is on the order of $10–15 once, then cents per day. Lower `TEXT_BACKFILL_DAYS` to spend less.
+
+## Caveats
+
+- "Mentioned" is not always "recommended": link mentions are counted without reading the sentiment. The LLM pass only counts positive recommendations.
+- Comments that name a title in plain text outside the keyword list, or older than the plain-text backfill window, are only counted if they link to IMDb or Wikipedia.

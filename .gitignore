@@ -1,0 +1,8 @@
+node_modules/
+.wrangler/
+.dev.vars
+.env
+# Stremio addon-collection backups; contain the auth key
+backups/
+.DS_Store
+data/

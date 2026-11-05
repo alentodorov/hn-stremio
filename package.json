@@ -1,0 +1,16 @@
+{
+  "name": "hn-stremio",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --test-scheduled",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail",
+    "db:init": "wrangler d1 execute hn-stremio --remote --file schema.sql",
+    "backfill:links": "node scripts/backfill-links.mjs data/local.sqlite",
+    "db:seed": "node scripts/export-sql.mjs data/local.sqlite > data/seed.sql && wrangler d1 execute hn-stremio --remote --file data/seed.sql"
+  },
+  "devDependencies": {
+    "wrangler": "^4.157.0"
+  }
+}
