@@ -30,6 +30,7 @@
   ul { padding-left: 1.2em; margin: 8px 0; }
   .row { display: flex; flex-direction: column; gap: 8px; margin: 32px 0; }
   .row a { text-decoration: none; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px 16px; }
   code { display: block; font: 11px/1.6 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
   footer { margin-top: 32px; }
   @media (width <= 480px) { main { margin: 32px auto; } }
@@ -58,8 +59,10 @@
   <p class="muted">Top movies and series, all-time and from the last 60 days, ranked by how many different people mentioned them.</p>
 
   <div class="row">
-    <a id="install" href="#">[install in stremio]</a>
-    <button id="copy" type="button">[copy manifest url]</button>
+    <div class="actions">
+      <a id="install" href="#">[install in stremio]</a>
+      <button id="copy" type="button">[copy manifest url]</button>
+    </div>
     <code id="url"></code>
   </div>
 
