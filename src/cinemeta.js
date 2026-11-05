@@ -46,19 +46,24 @@ export async function search({ title, year, type }) {
   const q = norm(title);
   let best = null;
   let bestScore = 0;
-  // Name points dominate: an exact name with the wrong year (6 - 1) still beats a contained name
-  // with the right year (2 + 2), which beats a top-three result with the right year (1 + 2).
-  // Without a year from the model, only an exact name is trusted.
+  // An exact name that is IMDb's top result or has the right year dominates (6): with the wrong
+  // year (6 - 1) it still beats a contained name with the right year (2 + 2) and a top-three result
+  // with the right year (1 + 2). An exact name further down with the wrong year (2 - 1) does not:
+  // that is how "Se7en" the 2022 fan video loses to "Seven" (1995). Videos and specials are
+  // demoted a point. Without a year from the model, only an exact name is trusted.
   hits.forEach((h, i) => {
     const name = norm(h.l);
+    const exact = name === q || tight(h.l) === tight(title);
+    const yearOk = Boolean(year && h.y && Math.abs(h.y - year) <= 1);
     let score = 0;
-    if (name === q || tight(h.l) === tight(title)) score = 6;
+    if (exact) score = i === 0 || yearOk ? 6 : 2;
     else if (!year) return;
     else if (` ${name} `.includes(` ${q} `)) score = 2;
     else if (i < 3) score = 1;
     if (!score) return;
-    if (year && h.y && Math.abs(h.y - year) <= 1) score += 2;
+    if (yearOk) score += 2;
     else if (year && h.y) score -= 1;
+    if (h.qid === "video" || h.qid === "tvSpecial") score -= 1;
     if (score > bestScore) [best, bestScore] = [h, score];
   });
   return bestScore >= 2 ? best.id : null;
