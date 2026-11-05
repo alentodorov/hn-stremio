@@ -18,7 +18,7 @@ Inspired by Andrej Karpathy's [HackerTube](https://hackertube.org), which mined 
 1. **Find mentions.** HN comments come from the [Algolia HN Search API](https://hn.algolia.com/api). Three sources:
    - IMDb title links (`imdb.com/title/tt…`) give the IMDb id directly.
    - Wikipedia links to film or TV articles (`…_(film)`, `…_(TV_series)`, `…_(miniseries)`, …) are mapped to IMDb ids through Wikidata (property P345).
-   - Plain-text recommendations: comments containing words like *movie, film, documentary, series, season, anime, watched* are read in batches of 20 by Workers AI (`@cf/meta/llama-3.3-70b-instruct-fp8-fast`, JSON mode), which lists the titles each commenter recommends or praises and skips passing references, books, games and YouTube videos. Titles are matched to Cinemeta by exact name, or close name plus year, so vague guesses are dropped.
+   - Plain-text recommendations: comments containing words like *movie, film, documentary, series, season, anime, watched* are read in batches of 20 by Workers AI (`@cf/openai/gpt-oss-120b`, JSON mode), which lists the titles each commenter recommends or praises and skips passing references, books, games and YouTube videos. Titles are matched to Cinemeta by exact name, or close name plus year, so vague guesses are dropped.
 2. **Resolve.** Every IMDb id is checked against IMDb's suggestion endpoint for its type (movie or series), name and year; posters come from Stremio's metahub. Episodes, shorts and other IMDb pages drop out here. (Cinemeta isn't used for this because it mistypes some ids: it lists Fight Club as a Korean TV show.)
 3. **Rank.** Titles are ranked by the number of distinct commenters who mentioned them, so one person linking the same film ten times counts once. Ties go to the most recently mentioned.
 
@@ -47,7 +47,7 @@ Settings are `vars` in `wrangler.jsonc`: the model, per-run LLM and lookup budge
 
 ### Cost
 
-Link mentions cost nothing but requests. The LLM pass reads about 150 matching comments a day going forward, plus about 55,000 for a one-year backfill and a few thousand from Ask HN threads; at Workers AI's Llama 3.3 70B prices that is roughly $10 once, then a few cents a day. Lower `TEXT_BACKFILL_DAYS` to spend less.
+Link mentions cost nothing but requests. The LLM pass reads about 150 matching comments a day going forward, plus about 55,000 for a one-year backfill and a few thousand from Ask HN threads; at Workers AI's gpt-oss-120b prices that is roughly $10 once, then a few cents a day. Lower `TEXT_BACKFILL_DAYS` to spend less.
 
 ## Caveats
 

@@ -12,7 +12,7 @@
   "rules": [{ "type": "Text", "globs": ["**/*.html"], "fallthrough": true }],
   "vars": {
     // Extracts titles from plain-text comments. Needs JSON mode support.
-    "MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+    "MODEL": "@cf/openai/gpt-oss-120b",
     "LLM_CALLS_PER_RUN": "10",   // 20 comments per call
     "LOOKUPS_PER_RUN": "300",    // Cinemeta / Wikipedia requests per run
     "TEXT_BACKFILL_DAYS": "365", // how far back the plain-text LLM pass goes
