@@ -5,15 +5,15 @@ const PAGE_SIZE = 100;
 const CATALOGS = [
   { type: "movie", id: "hn-top-movies", name: "Hacker News: All-Time Top", rank: "top" },
   { type: "series", id: "hn-top-series", name: "Hacker News: All-Time Top", rank: "top" },
-  { type: "movie", id: "hn-recent-movies", name: "Hacker News: Talked About Now", rank: "recent" },
-  { type: "series", id: "hn-recent-series", name: "Hacker News: Talked About Now", rank: "recent" },
+  { type: "movie", id: "hn-recent-movies", name: "Hacker News: Recommended This Year", rank: "recent" },
+  { type: "series", id: "hn-recent-series", name: "Hacker News: Recommended This Year", rank: "recent" },
 ];
 
 const MANIFEST = {
   id: "ro.alen.hn-stremio",
-  version: "1.0.0",
+  version: "1.1.0",
   name: "Hacker News Picks",
-  description: "Movies and series that Hacker News commenters recommend: the all-time favorites and what people are talking about right now.",
+  description: "Movies and series that Hacker News commenters recommend: the all-time favorites and this year's picks.",
   logo: "https://news.ycombinator.com/y18.svg",
   resources: ["catalog"],
   types: ["movie", "series"],
@@ -32,8 +32,8 @@ const json = (data, status = 200, maxAge = 0) =>
 
 // Rank by distinct commenters, so one person linking a title ten times counts once.
 async function ranked(env, { type, rank }, skip) {
-  const recentDays = Number(env.RECENT_DAYS || 60);
-  const since = rank === "recent" ? Math.floor(Date.now() / 1000) - recentDays * 86400 : 0;
+  const since = rank === "recent" ? Math.floor(Date.parse(env.RECENT_SINCE || "2026-01-01") / 1000) : 0;
+  const year = new Date(since * 1000).getUTCFullYear();
   const { results } = await env.DB.prepare(
     `SELECT t.imdb_id, t.name, t.year, t.poster, COUNT(DISTINCT m.author) AS people, MAX(m.created_at) AS last
        FROM mentions m JOIN titles t ON t.imdb_id = m.imdb_id
@@ -51,7 +51,7 @@ async function ranked(env, { type, rank }, skip) {
     releaseInfo: r.year || undefined,
     description:
       rank === "recent"
-        ? `Talked about by ${plural(r.people, "Hacker News commenter")} in the last ${recentDays} days.`
+        ? `Recommended by ${plural(r.people, "Hacker News commenter")} in ${year}.`
         : `Recommended by ${plural(r.people, "Hacker News commenter")}.`,
   }));
 }
@@ -64,7 +64,7 @@ async function catalog(request, env, ctx, type, id, extra) {
 
   // Rankings only change when the cron runs, so serve them from the edge cache for a while.
   const cache = caches.default;
-  const cacheKey = new Request(new URL(`/cache/v4/${type}/${id}/${skip}`, request.url));
+  const cacheKey = new Request(new URL(`/cache/v5/${type}/${id}/${skip}`, request.url));
   const hit = await cache.match(cacheKey);
   if (hit) return hit;
   const res = json({ metas: await ranked(env, def, skip), cacheMaxAge: 3600, staleRevalidate: 86400 }, 200, 3600);

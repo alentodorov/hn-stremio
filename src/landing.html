@@ -56,7 +56,7 @@
 <main>
   <header><h1>hacker news picks · a stremio addon</h1></header>
   <p class="muted">The movies and series that Hacker News commenters recommend, as a <a href="https://www.stremio.com">Stremio</a> addon. It finds them by scanning HN comments for IMDb and Wikipedia links, and by having an AI model read the comments that mention a film or show by name. Inspired by Karpathy's HackerTube.</p>
-  <p class="muted">Top movies and series, all-time and from the last 60 days, ranked by how many different people mentioned them.</p>
+  <p class="muted">Top movies and series, all-time and this year, ranked by how many different people mentioned them.</p>
 
   <div class="row">
     <div class="actions">
@@ -74,8 +74,8 @@
   const ROWS = [
     ["movie", "hn-top-movies", "Hacker News: All-Time Top", "movies"],
     ["series", "hn-top-series", "Hacker News: All-Time Top", "series"],
-    ["movie", "hn-recent-movies", "Hacker News: Talked About Now", "movies"],
-    ["series", "hn-recent-series", "Hacker News: Talked About Now", "series"],
+    ["movie", "hn-recent-movies", "Hacker News: Recommended This Year", "movies"],
+    ["series", "hn-recent-series", "Hacker News: Recommended This Year", "series"],
   ];
   const board = document.getElementById("board");
   for (const [type, id, name, kind] of ROWS) {
@@ -86,7 +86,7 @@
     board.append(shelf);
     const strip = shelf.querySelector(".strip");
     fetch(`/catalog/${type}/${id}.json`).then((r) => r.json()).then(({ metas }) => {
-      if (!metas.length) strip.innerHTML = '<span class="empty">filling up, check back in a few hours</span>';
+      if (!metas.length) strip.innerHTML = '<span class="empty">nothing yet</span>';
       metas.slice(0, 40).forEach((m, i) => {
         const card = document.createElement("a");
         card.className = "card";

@@ -2,7 +2,7 @@
 // using the same code as the Worker but without its time limit. The Worker's cron only reads
 // new comments; all history comes from here.
 //   node scripts/backfill.mjs            # until every backfill job reports done
-//   node scripts/backfill.mjs recent     # stop once the RECENT_DAYS text window is done
+//   node scripts/backfill.mjs recent     # stop once the RECENT_SINCE text window is done
 // Needs a wrangler login (uses its OAuth token). Safe to stop and restart: cursors live in D1.
 const BACKFILL_FROM = "2026-01-01"; // how far back the plain-text LLM pass goes
 const SHARDS = 6;                   // date ranges of the history read side by side
@@ -75,7 +75,7 @@ const started = Date.now();
 const jobs = [
   ["imdb links", () => backfillLinks(env, b, "imdb")],
   ["wikipedia links", () => backfillLinks(env, b, "wiki")],
-  [`text, last ${env.RECENT_DAYS} days`, () => backfillText(env, b, Number(env.RECENT_DAYS || 60))],
+  [`text, since ${env.RECENT_SINCE}`, () => backfillText(env, b, Math.ceil((Date.now() - Date.parse(env.RECENT_SINCE)) / 86400000))],
   ...(only === "recent" ? [] : [
     ["ask hn threads", threadsSideBySide],
     [`text, back to ${BACKFILL_FROM}`, shardedText],
@@ -110,10 +110,10 @@ async function threadsSideBySide() {
   return false;
 }
 
-// The history before the RECENT_DAYS window, split into SHARDS date ranges read side by side,
+// The history before the RECENT_SINCE window, split into SHARDS date ranges read side by side,
 // each with its own cursor in D1. Runs once and returns false.
 async function shardedText() {
-  const to = await getState(env, "text_before", null); // where the RECENT_DAYS pass stopped
+  const to = await getState(env, "text_before", null); // where the RECENT_SINCE pass stopped
   if (!to) throw new Error("run the recent window first");
   const from = Math.floor(Date.parse(BACKFILL_FROM) / 1000);
   const span = (to - from) / SHARDS;
