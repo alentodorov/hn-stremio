@@ -14,6 +14,7 @@ for (const [i, r] of rows.entries()) {
   const m = r.key.match(/^q:(movie|series)\|(.*)\|(\d*)$/);
   if (!m) continue;
   const [, type, title, year] = m;
+  if (!year) continue; // the extractor no longer passes year-less titles; leave those keys alone
   let id;
   for (let attempt = 0; attempt < 4 && id === undefined; attempt++) {
     try { id = (await search({ title, year: Number(year) || null, type })) || ""; } catch { await sleep(5000); }
@@ -21,7 +22,7 @@ for (const [i, r] of rows.entries()) {
   if (id === undefined) { console.error(`failed: ${r.key}`); continue; }
   results.push({ key: r.key, old: r.imdb_id, new: id });
   if ((i + 1) % 250 === 0) console.error(`${i + 1}/${rows.length}`);
-  await sleep(200);
+  await sleep(120);
 }
 
 const out = [];

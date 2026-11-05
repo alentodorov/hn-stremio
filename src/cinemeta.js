@@ -46,10 +46,14 @@ export async function search({ title, year, type }) {
   const q = norm(title);
   let best = null;
   let bestScore = 0;
+  // Name points dominate: an exact name with the wrong year (6 - 1) still beats a contained name
+  // with the right year (2 + 2), which beats a top-three result with the right year (1 + 2).
+  // Without a year from the model, only an exact name is trusted.
   hits.forEach((h, i) => {
     const name = norm(h.l);
     let score = 0;
-    if (name === q || tight(h.l) === tight(title)) score = 3;
+    if (name === q || tight(h.l) === tight(title)) score = 6;
+    else if (!year) return;
     else if (` ${name} `.includes(` ${q} `)) score = 2;
     else if (i < 3) score = 1;
     if (!score) return;
