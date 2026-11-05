@@ -72,10 +72,10 @@
 <script>
   // Preview the four catalogs as rows of posters, like the Stremio board.
   const ROWS = [
-    ["movie", "hn-recent-movies", "Movies: Recommended This Year"],
-    ["series", "hn-recent-series", "Series: Recommended This Year"],
     ["movie", "hn-top-movies", "Movies: All-Time Top"],
     ["series", "hn-top-series", "Series: All-Time Top"],
+    ["movie", "hn-recent-movies", "Movies: Recommended This Year"],
+    ["series", "hn-recent-series", "Series: Recommended This Year"],
   ];
   const board = document.getElementById("board");
   for (const [type, id, name] of ROWS) {

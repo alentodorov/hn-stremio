@@ -4,10 +4,10 @@ A Stremio addon, running as a Cloudflare Worker, that adds four rows of the movi
 
 | Row | What's in it |
 | --- | --- |
-| Movies: Recommended This Year | Most-mentioned movies in 2026 |
-| Series: Recommended This Year | Same, for series |
 | Movies: All-Time Top | Movies mentioned by the most distinct HN commenters, 2007 to now |
 | Series: All-Time Top | Same, for series |
+| Movies: Recommended This Year | Most-mentioned movies in 2026 |
+| Series: Recommended This Year | Same, for series |
 
 No account or configuration needed. Install from **https://hn-stremio.alen.ro**.
 
