@@ -19,7 +19,7 @@
     "RECENT_SINCE": "2026-01-01", // start of the "Recommended This Year" rows
     // PostHog: landing page views and catalog requests. Leave the token empty to disable.
     "POSTHOG_HOST": "https://eu.i.posthog.com",
-    "POSTHOG_TOKEN": ""
+    "POSTHOG_TOKEN": "phc_tWWGvSNxJfyEQqPmah8XQeN6euLG7ZSY46sbahCGXYuj"
   },
   "observability": { "enabled": true }
 }
