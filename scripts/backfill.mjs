@@ -1,8 +1,10 @@
 // Run the history backfill from this machine against the production D1 and Workers AI,
-// using the same code as the Worker but without its time limit.
-//   node scripts/backfill-remote.mjs            # until every backfill job reports done
-//   node scripts/backfill-remote.mjs recent     # stop once the RECENT_DAYS text window is done
+// using the same code as the Worker but without its time limit. The Worker's cron only reads
+// new comments; all history comes from here.
+//   node scripts/backfill.mjs            # until every backfill job reports done
+//   node scripts/backfill.mjs recent     # stop once the RECENT_DAYS text window is done
 // Needs a wrangler login (uses its OAuth token). Safe to stop and restart: cursors live in D1.
+const BACKFILL_FROM = "2026-01-01"; // how far back the plain-text LLM pass goes
 import { readFileSync } from "node:fs";
 import { backfillLinks, backfillThreads, backfillText } from "../src/ingest.js";
 
@@ -31,12 +33,14 @@ const API = `https://api.cloudflare.com/client/v4/accounts/${account}`;
 
 async function api(path, body) {
   for (let attempt = 0; ; attempt++) {
-    const res = await fetch(`${API}${path}`, { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify(body) });
-    const j = await res.json().catch(() => ({}));
-    if (res.ok && j.success) return j.result;
-    if (res.status === 401 || res.status === 403) token = refreshToken();
-    if (attempt >= 3) throw new Error(`${path}: ${res.status} ${JSON.stringify(j.errors || "").slice(0, 300)}`);
-    await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+    const res = await fetch(`${API}${path}`, { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
+    const j = res ? await res.json().catch(() => ({})) : {};
+    if (res?.ok && j.success) return j.result;
+    if (res?.status === 401 || res?.status === 403) token = refreshToken();
+    // Rate limits and server errors get patient retries: a skipped LLM batch would lose its comments.
+    const retryable = !res || res.status === 429 || res.status >= 500;
+    if (attempt >= (retryable ? 8 : 3)) throw new Error(`${path}: ${res?.status} ${JSON.stringify(j.errors || "").slice(0, 300)}`);
+    await new Promise((r) => setTimeout(r, (retryable ? 3000 : 1500) * (attempt + 1)));
   }
 }
 
@@ -56,8 +60,8 @@ const DB = {
   batch: async (stmts) => { for (let i = 0; i < stmts.length; i += 100) await api(`/d1/database/${dbId}/query`, { sql: stmts.slice(i, i + 100).map((s) => s.inline()).join(";\n") }); return []; },
 };
 const AI = { run: (model, input) => api(`/ai/run/${model}`, input) };
-// No Worker limits here, so go wide: more LLM calls in flight and bigger steps.
-const env = { ...cfg.vars, LLM_CONCURRENCY: "8", LOOKUP_CONCURRENCY: "8", TEXT_STEP_CALLS: "50", DB, AI };
+// No Worker limits here, so go wide: many LLM calls in flight and full 1000-comment pages per step.
+const env = { ...cfg.vars, LLM_CONCURRENCY: "24", LOOKUP_CONCURRENCY: "8", TEXT_STEP_CALLS: "50", DB, AI };
 
 const only = process.argv[2];
 const b = { llm: Infinity, lookups: Infinity };
@@ -68,7 +72,7 @@ const jobs = [
   [`text, last ${env.RECENT_DAYS} days`, () => backfillText(env, b, Number(env.RECENT_DAYS || 60))],
   ...(only === "recent" ? [] : [
     ["ask hn threads", () => backfillThreads(env, b)],
-    [`text, last ${env.TEXT_BACKFILL_DAYS} days`, () => backfillText(env, b, Number(env.TEXT_BACKFILL_DAYS || 365))],
+    [`text, back to ${BACKFILL_FROM}`, () => backfillText(env, b, Math.ceil((Date.now() - Date.parse(BACKFILL_FROM)) / 86400000))],
   ]),
 ];
 const cursor = async () => { const r = await DB.prepare("SELECT value FROM state WHERE key='text_before'").first(); return r ? new Date(JSON.parse(r.value) * 1000).toISOString().slice(0, 16) : "-"; };

@@ -1,5 +1,5 @@
 import LANDING_HTML from "./landing.html";
-import { budget, ingestNew, backfillLinks, backfillThreads, backfillText, OutOfBudget, getState } from "./ingest.js";
+import { budget, ingestNew, OutOfBudget, getState } from "./ingest.js";
 
 const PAGE_SIZE = 100;
 const CATALOGS = [
@@ -118,27 +118,13 @@ async function handle(request, env, ctx) {
 
 // ---------- background ingest ----------
 
+// The daily cron only reads new comments. History is backfilled from a laptop with scripts/backfill.mjs.
 async function ingest(env) {
   const b = budget(env);
   const started = Date.now();
-  const timeLeft = () => Date.now() - started < 8 * 60_000;
   try {
     const n = await ingestNew(env, b);
     console.log(`New comments checked: ${n}`);
-    // Backfill history in order: link mentions (cheap, no LLM), plain text for the "Talked About Now"
-    // window, Ask HN recommendation threads, then older plain text.
-    const jobs = [
-      () => backfillLinks(env, b, "imdb"),
-      () => backfillLinks(env, b, "wiki"),
-      () => backfillText(env, b, Number(env.RECENT_DAYS || 60)),
-      () => backfillThreads(env, b),
-      () => backfillText(env, b, Number(env.TEXT_BACKFILL_DAYS || 365)),
-    ];
-    for (const job of jobs) {
-      while (timeLeft() && b.llm > 0 && b.lookups > 0) {
-        if (!(await job())) break;
-      }
-    }
   } catch (err) {
     if (!(err instanceof OutOfBudget)) throw err;
   }

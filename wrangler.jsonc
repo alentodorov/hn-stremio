@@ -7,7 +7,7 @@
   "routes": [{ "pattern": "hn-stremio.alen.ro", "custom_domain": true }],
   "ai": { "binding": "AI" },
   "d1_databases": [{ "binding": "DB", "database_name": "hn-stremio", "database_id": "ca54a617-ad35-4a22-ad0c-76d29e6431af" }],
-  // Read new HN comments and continue the history backfill, once a day.
+  // Read new HN comments once a day. History is backfilled locally with scripts/backfill.mjs.
   "triggers": { "crons": ["0 6 * * *"] },
   "rules": [{ "type": "Text", "globs": ["**/*.html"], "fallthrough": true }],
   "vars": {
@@ -15,9 +15,7 @@
     "MODEL": "@cf/openai/gpt-oss-120b",
     "LLM_CALLS_PER_RUN": "30",   // 20 comments per call, ~15s each
     "LLM_CONCURRENCY": "3",      // LLM calls in flight at once
-    "TEXT_STEP_CALLS": "10",     // LLM calls per plain-text backfill step
     "LOOKUPS_PER_RUN": "300",    // Cinemeta / Wikipedia requests per run
-    "TEXT_BACKFILL_DAYS": "365", // how far back the plain-text LLM pass goes
     "RECENT_DAYS": "60"          // window for the "Talked About Now" rows
   },
   "observability": { "enabled": true }

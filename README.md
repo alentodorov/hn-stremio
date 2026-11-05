@@ -22,12 +22,12 @@ Inspired by Andrej Karpathy's [HackerTube](https://hackertube.org), which mined 
 2. **Resolve.** Every IMDb id is checked against IMDb's suggestion endpoint for its type (movie or series), name and year; posters come from Stremio's metahub. Episodes, shorts and other IMDb pages drop out here. (Cinemeta isn't used for this because it mistypes some ids: it lists Fight Club as a Korean TV show.)
 3. **Rank.** Titles are ranked by the number of distinct commenters who mentioned them, so one person linking the same film ten times counts once. Ties go to the most recently mentioned.
 
-Everything is stored in D1 (`schema.sql`). A daily cron (06:00 UTC) reads new comments, then spends the rest of its budget on the history backfill, in this order:
+Everything is stored in D1 (`schema.sql`). A daily cron (06:00 UTC) reads the comments posted since the last run. History is backfilled from a laptop with `node scripts/backfill.mjs`, which runs the same code against the production database and Workers AI with many LLM calls in flight, in this order:
 
-1. All-time IMDb links, then Wikipedia links (no LLM). Usually seeded from a local run instead, see below.
-2. Plain-text comments from the last `RECENT_DAYS` (60), so the "Talked About Now" rows fill first (a few weeks at the default budget).
+1. All-time IMDb links, then Wikipedia links (no LLM). Usually seeded from `seed/links.sql` instead, see below.
+2. Plain-text comments from the last `RECENT_DAYS` (60), so the "Talked About Now" rows fill first.
 3. Ask HN recommendation threads ("best documentaries you've seen", "which movies did you watch multiple times", …), read in full by the LLM.
-4. Older plain-text comments, back `TEXT_BACKFILL_DAYS` (default 365).
+4. Older plain-text comments, back to `BACKFILL_FROM` in the script (2026-01-01).
 
 `/stats.json` shows the counts and how far each backfill has got.
 
@@ -43,11 +43,11 @@ npm run tail             # live logs
 
 `seed/links.sql` holds every IMDb and Wikipedia link mention on HN up to 2026-11-05 (about 8,300 mentions of 4,300 titles), so the cron doesn't have to crawl them. To rebuild it: `npm run seed:build` (Node 22.5+, no LLM, about an hour).
 
-Settings are `vars` in `wrangler.jsonc`: the model, per-run LLM and lookup budgets, how far back the plain-text pass goes, and the "Talked About Now" window.
+Settings are `vars` in `wrangler.jsonc`: the model, per-run LLM and lookup budgets, and the "Talked About Now" window.
 
 ### Cost
 
-Link mentions cost nothing but requests. The LLM pass reads about 150 matching comments a day going forward, plus about 55,000 for a one-year backfill and a few thousand from Ask HN threads; at Workers AI's gpt-oss-120b prices that is roughly $10 once, then a few cents a day. Lower `TEXT_BACKFILL_DAYS` to spend less.
+Link mentions cost nothing but requests. The LLM pass reads about 150 matching comments a day going forward, plus about 45,000 for the 2026 backfill and a few thousand from Ask HN threads; at Workers AI's gpt-oss-120b prices that is roughly $8 once, then a few cents a day. Move `BACKFILL_FROM` to spend less.
 
 ## Caveats
 
