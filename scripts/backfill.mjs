@@ -5,8 +5,11 @@
 //   node scripts/backfill.mjs recent     # stop once the RECENT_DAYS text window is done
 // Needs a wrangler login (uses its OAuth token). Safe to stop and restart: cursors live in D1.
 const BACKFILL_FROM = "2026-01-01"; // how far back the plain-text LLM pass goes
+const SHARDS = 6;                   // date ranges of the history read side by side
+const THREADS_AT_ONCE = 4;          // Ask HN threads read side by side
 import { readFileSync } from "node:fs";
-import { backfillLinks, backfillThreads, backfillText, processComments, pool } from "../src/ingest.js";
+import { backfillLinks, backfillText, backfillTextRange, processComments, pool, getState, setState } from "../src/ingest.js";
+import { recommendationThreads, threadComments } from "../src/hn.js";
 
 // wrangler.jsonc has // comments; strip them (outside strings) before parsing.
 const stripComments = (src) => {
@@ -31,6 +34,7 @@ const refreshToken = () => { execFileSync("npx", ["wrangler", "whoami"], { stdio
 let token = readToken();
 const API = `https://api.cloudflare.com/client/v4/accounts/${account}`;
 
+let throttled = 0;
 async function api(path, body) {
   for (let attempt = 0; ; attempt++) {
     const res = await fetch(`${API}${path}`, { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
@@ -39,6 +43,7 @@ async function api(path, body) {
     if (res?.status === 401 || res?.status === 403) token = refreshToken();
     // Rate limits and server errors get patient retries: a skipped LLM batch would lose its comments.
     const retryable = !res || res.status === 429 || res.status >= 500;
+    if (res?.status === 429 && ++throttled % 20 === 1) console.error(`throttled by ${path.split("/")[1]} (${throttled} so far)`);
     if (attempt >= (retryable ? 8 : 3)) throw new Error(`${path}: ${res?.status} ${JSON.stringify(j.errors || "").slice(0, 300)}`);
     await new Promise((r) => setTimeout(r, (retryable ? 3000 : 1500) * (attempt + 1)));
   }
@@ -60,8 +65,9 @@ const DB = {
   batch: async (stmts) => { for (let i = 0; i < stmts.length; i += 100) await api(`/d1/database/${dbId}/query`, { sql: stmts.slice(i, i + 100).map((s) => s.inline()).join(";\n") }); return []; },
 };
 const AI = { run: (model, input) => api(`/ai/run/${model}`, input) };
-// No Worker limits here, so go wide: many LLM calls in flight and full 1000-comment pages per step.
-const env = { ...cfg.vars, LLM_CONCURRENCY: "24", LOOKUP_CONCURRENCY: "8", TEXT_STEP_CALLS: "50", DB, AI };
+// No Worker limits here, so go wide: full 1000-comment pages per step, many LLM calls in flight per
+// shard. Lookups stay narrow per shard because IMDb and Cinemeta throttle quickly.
+const env = { ...cfg.vars, LLM_CONCURRENCY: "12", LOOKUP_CONCURRENCY: "3", TEXT_STEP_CALLS: "50", DB, AI };
 
 const only = process.argv[2];
 const b = { llm: Infinity, lookups: Infinity };
@@ -71,11 +77,67 @@ const jobs = [
   ["wikipedia links", () => backfillLinks(env, b, "wiki")],
   [`text, last ${env.RECENT_DAYS} days`, () => backfillText(env, b, Number(env.RECENT_DAYS || 60))],
   ...(only === "recent" ? [] : [
-    ["ask hn threads", () => backfillThreads(env, b)],
-    [`text, back to ${BACKFILL_FROM}`, () => backfillText(env, b, Math.ceil((Date.now() - Date.parse(BACKFILL_FROM)) / 86400000))],
+    ["ask hn threads", threadsSideBySide],
+    [`text, back to ${BACKFILL_FROM}`, shardedText],
   ]),
   ["unread comments", sweepUnread],
 ];
+
+// Every Ask HN recommendation thread, a few at a time. Runs once and returns false.
+async function threadsSideBySide() {
+  let threads = await getState(env, "threads_list", null);
+  if (!threads) {
+    threads = await recommendationThreads();
+    await setState(env, "threads_list", threads);
+  }
+  const done = await getState(env, "threads_done", []);
+  const todo = threads.filter((t) => !done.includes(t.id));
+  await pool(todo, THREADS_AT_ONCE, async (t) => {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const comments = await threadComments(t.id);
+        await processComments(env, comments, { useLlm: true, b });
+        done.push(t.id);
+        await setState(env, "threads_done", done);
+        console.log(`Thread done (${done.length}/${threads.length}): ${t.title} (${comments.length} comments)`);
+        return;
+      } catch (err) {
+        console.error(`thread ${t.id} failed: ${err.message}; retrying in 20s`);
+        await new Promise((r) => setTimeout(r, 20000));
+      }
+    }
+  });
+  return false;
+}
+
+// The history before the RECENT_DAYS window, split into SHARDS date ranges read side by side,
+// each with its own cursor in D1. Runs once and returns false.
+async function shardedText() {
+  const to = await getState(env, "text_before", null); // where the RECENT_DAYS pass stopped
+  if (!to) throw new Error("run the recent window first");
+  const from = Math.floor(Date.parse(BACKFILL_FROM) / 1000);
+  const span = (to - from) / SHARDS;
+  const shards = Array.from({ length: SHARDS }, (_, i) => ({
+    i, key: `text_before:${i}`, floor: Math.floor(from + i * span), start: Math.floor(from + (i + 1) * span),
+  }));
+  await Promise.all(shards.map(async (sh) => {
+    for (let step = 1; ; step++) {
+      let more;
+      try {
+        more = await backfillTextRange(env, b, sh);
+      } catch (err) {
+        console.error(`shard ${sh.i} step ${step} failed: ${err.message}; retrying in 20s`);
+        await new Promise((r) => setTimeout(r, 20000));
+        continue;
+      }
+      if (!more) break;
+      const at = new Date((await getState(env, sh.key)) * 1000).toISOString().slice(0, 16);
+      console.log(`shard ${sh.i}: step ${step}, cursor ${at} (floor ${new Date(sh.floor * 1000).toISOString().slice(0, 10)}), ${Math.round((Date.now() - started) / 60000)} min`);
+    }
+    console.log(`shard ${sh.i} done`);
+  }));
+  return false;
+}
 
 // Comments an earlier pass left unread (a failed LLM call, or a link-only read): fetch them by id and read them.
 async function sweepUnread() {

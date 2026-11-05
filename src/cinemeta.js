@@ -1,10 +1,15 @@
 // Title metadata: IMDb's suggestion endpoint for ids, Cinemeta (Stremio's catalog) for title search. No keys needed.
 const CINEMETA = "https://v3-cinemeta.strem.io";
 
+// A throttled or failing upstream throws, so the caller retries later instead of caching a miss.
 async function getJson(url) {
-  const res = await fetch(url, { redirect: "follow" });
-  if (!res.ok) return null;
-  return res.json().catch(() => null);
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(url, { redirect: "follow" });
+    if (res.ok) return res.json().catch(() => null);
+    if (res.status !== 429 && res.status < 500) return null;
+    if (attempt >= 2) throw new Error(`${new URL(url).host} ${res.status}`);
+    await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+  }
 }
 
 // IMDb id -> title, typed by IMDb's own suggestion endpoint. Cinemeta can't be used for this: its
@@ -18,9 +23,9 @@ export const posterUrl = (hit, id) =>
   hit?.i?.imageUrl ? hit.i.imageUrl.replace(/\._V1_[^.]*\.(jpg|png)$/i, "._V1_SX300_.$1") : `https://images.metahub.space/poster/small/${id}/img`;
 
 export async function byImdbId(id) {
-  const res = await fetch(`https://v3.sg.media-imdb.com/suggestion/t/${id}.json`);
-  if (!res.ok) throw new Error(`IMDb suggestion ${res.status}`);
-  const hit = ((await res.json()).d || []).find((d) => d.id === id);
+  const data = await getJson(`https://v3.sg.media-imdb.com/suggestion/t/${id}.json`);
+  if (!data) throw new Error("IMDb suggestion failed");
+  const hit = (data.d || []).find((d) => d.id === id);
   const type = IMDB_TYPES[hit?.qid];
   if (!type) return null; // episodes, shorts, games, people, ...
   return { imdb_id: id, type, name: hit.l, year: hit.y ? String(hit.y) : null, poster: posterUrl(hit, id) };

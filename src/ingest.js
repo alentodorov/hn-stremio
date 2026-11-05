@@ -263,16 +263,14 @@ export async function backfillThreads(env, b) {
   return true;
 }
 
-// Older plain-text comments, back to `days` ago. Returns false when finished.
-export async function backfillText(env, b, days) {
-  const floor = Math.floor(Date.now() / 1000) - days * 86400;
-  const fwd = await getState(env, "fwd_cursor", Math.floor(Date.now() / 1000));
-  const before = await getState(env, "text_before", fwd);
+// Plain-text comments between `floor` and the cursor kept under `key` (which starts at `start`),
+// newest first. Returns false when finished. Separate keys let several ranges run side by side.
+export async function backfillTextRange(env, b, { key, floor, start }) {
+  const before = await getState(env, key, start);
   if (before <= floor) return false;
-  // Small pages: each comment costs LLM time.
   const { hits } = await commentsPage({ query: SCREEN_WORDS, anyWord: true, after: floor, before });
   if (!hits.length) {
-    await setState(env, "text_before", floor);
+    await setState(env, key, floor);
     return false;
   }
   // A bounded number of calls per step, so the caller gets to check the clock between steps.
@@ -283,6 +281,14 @@ export async function backfillText(env, b, days) {
   const chunk = hits.filter((h) => h.createdAt >= cut);
   await processComments(env, chunk, { useLlm: true, b: { ...b, llm: Infinity } });
   b.llm -= calls;
-  await setState(env, "text_before", cut);
+  await setState(env, key, cut);
   return true;
+}
+
+// Older plain-text comments, back to `days` ago. Returns false when finished.
+export async function backfillText(env, b, days) {
+  const now = Math.floor(Date.now() / 1000);
+  const floor = now - days * 86400;
+  const start = await getState(env, "fwd_cursor", now);
+  return backfillTextRange(env, b, { key: "text_before", floor, start });
 }
