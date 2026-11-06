@@ -1,13 +1,11 @@
 # Hacker News Picks for Stremio
 
-A Stremio addon, running as a Cloudflare Worker, that adds four rows of the movies and series Hacker News commenters recommend:
+A Stremio addon, running as a Cloudflare Worker, that adds two rows of the movies and series Hacker News commenters recommend:
 
 | Row | What's in it |
 | --- | --- |
 | Movies: All-Time Top | Movies mentioned by the most distinct HN commenters, 2007 to now |
 | Series: All-Time Top | Same, for series |
-| Movies: Recommended This Year | Most-mentioned movies in 2026 |
-| Series: Recommended This Year | Same, for series |
 
 No account or configuration needed. Install from **https://hn-stremio.alen.ro**.
 
@@ -25,7 +23,7 @@ Inspired by Andrej Karpathy's [HackerTube](https://hackertube.org), which mined 
 Everything is stored in D1 (`schema.sql`). A daily cron (06:00 UTC) reads the comments posted since the last run. History is backfilled from a laptop with `node scripts/backfill.mjs`, which runs the same code against the production database and Workers AI with many LLM calls in flight, in this order:
 
 1. All-time IMDb links, then Wikipedia links (no LLM). Usually seeded from `seed/links.sql` instead, see below.
-2. Plain-text comments since `RECENT_SINCE` (2026-01-01), so the "Recommended This Year" rows fill first.
+2. Plain-text comments since `RECENT_SINCE` (2026-01-01), newest first.
 3. Ask HN recommendation threads ("best documentaries you've seen", "which movies did you watch multiple times", …), read in full by the LLM.
 4. Older plain-text comments, back to `BACKFILL_FROM` in the script (2025-01-01).
 
@@ -43,7 +41,7 @@ npm run tail             # live logs
 
 `seed/links.sql` holds every IMDb and Wikipedia link mention on HN up to 2026-11-05 (about 8,300 mentions of 4,300 titles), so the cron doesn't have to crawl them. To rebuild it: `npm run seed:build` (Node 22.5+, no LLM, about an hour).
 
-Settings are `vars` in `wrangler.jsonc`: the model, per-run LLM and lookup budgets, and the start date of the "Recommended This Year" rows.
+Settings are `vars` in `wrangler.jsonc`: the model, per-run LLM and lookup budgets, and the date the plain-text backfill starts from.
 
 ### Cost
 

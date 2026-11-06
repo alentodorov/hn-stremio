@@ -36,7 +36,7 @@
   footer { margin-top: 32px; }
   @media (width <= 480px) { main { margin: 32px auto; } }
 
-  /* A preview of the four rows as they appear on the Stremio board. */
+  /* A preview of the rows as they appear on the Stremio board. */
   .board { margin: 16px 0 64px; display: flex; flex-direction: column; gap: 28px; }
   .shelf { display: flex; flex-direction: column; gap: 10px; }
   .shelf h2 { font-size: 11px; font-weight: 400; color: var(--muted); margin: 0 24px; }
@@ -70,12 +70,10 @@
 </main>
 <section class="board" id="board" aria-label="Preview of the rows as they appear in Stremio"></section>
 <script>
-  // Preview the four catalogs as rows of posters, like the Stremio board.
+  // Preview the catalogs as rows of posters, like the Stremio board.
   const ROWS = [
     ["movie", "hn-top-movies", "Movies: All-Time Top"],
     ["series", "hn-top-series", "Series: All-Time Top"],
-    ["movie", "hn-recent-movies", "Movies: Recommended This Year"],
-    ["series", "hn-recent-series", "Series: Recommended This Year"],
   ];
   const board = document.getElementById("board");
   for (const [type, id, name] of ROWS) {

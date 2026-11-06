@@ -5,13 +5,11 @@ const PAGE_SIZE = 100;
 const CATALOGS = [
   { type: "movie", id: "hn-top-movies", name: "Movies: All-Time Top", rank: "top" },
   { type: "series", id: "hn-top-series", name: "Series: All-Time Top", rank: "top" },
-  { type: "movie", id: "hn-recent-movies", name: "Movies: Recommended This Year", rank: "recent" },
-  { type: "series", id: "hn-recent-series", name: "Series: Recommended This Year", rank: "recent" },
 ];
 
 const MANIFEST = {
   id: "ro.alen.hn-stremio",
-  version: "1.2.0",
+  version: "1.3.0",
   name: "Hacker News Picks",
   description: "Movies and series that HN recommends: the all-time favorites and this year's picks.",
   logo: "https://news.ycombinator.com/y18.svg",
